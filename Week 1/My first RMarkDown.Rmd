@@ -1,0 +1,77 @@
+---
+title: "My first RMarkDown"
+author: "Megan Masanz"
+date: "May 21, 2017"
+output: 
+  html_document: 
+    toc: yes
+---
+
+# Header 1
+
+Some text here.
+
+# Header 2
+
+Some text here.
+
+## Subheader
+
+Some text here.
+
+Some text here **bold**
+
+Some text here *italic*
+
+Here we see a `monospace` font
+
+- List could
+- List element.
+- List element.
+
+- [Google](www.google.com)
+- [RMarkdown Documentation](rmarkdown.studio.com)
+
+| a  | b   | c  |
+|----|-----|----|
+| 1  | 2   | 3  |
+| do | ray | me |
+
+```{r}
+x = 1:10
+y = 3 * x
+x + y
+```
+
+```{r, echo=FALSE}
+hist(y)
+```
+
+```{r, message=FALSE, warning=FALSE}
+z = c(1,1,2,3,5,8)
+z + x
+```
+
+```{r}
+library(readr)
+nutrition <- read_csv("nutrition.csv")
+
+```
+
+```{r examplechunk}
+
+# define function
+get_sd = function(x, biased = FALSE) {
+  n = length(x) - 1 * !biased
+  sqrt((1 / n) * sum((x - mean(x)) ^ 2))
+}
+
+# generate random sample data
+set.seed(42)
+(test_sample = rnorm(n = 10, mean = 2, sd = 5))
+
+```
+
+This is some more text `r mean(test_sample)`
+
+

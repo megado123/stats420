@@ -1,0 +1,79 @@
+---
+title: "Team Project: Data Analaysis Project Proposal: Consumer Attractions On Social Network Era"
+author: "Jianye Han (jianyeh2), Zach Litz (zlitz2), Megan Masanz (mjneuman)"
+date: "July 14, 2017"
+output: html_document
+---
+### Introduction
+This document is the data analysis project proposal for the STAT 420 team project. The following sections will fully describe the project proposal and all other required information.
+
+### Team Members
+- Jianye Han (NetID jianyeh2)
+- Zach Litz (NetID zlitz2)
+- Megan Masanz (NetID mjneuman)
+
+### Project Title
+This project is tentatively named **Linear Regression analysis of Consumer Attractions On Social Network Era**
+
+### Statement of Interest
+While no one in our group has direct has a direct business, science, or research interest in this data, collectively there is acknowledgement that social media has had a drastic impact on todays digital marketing.  
+
+Facebook's mission is: 
+
+[Founded in 2004, Facebook's mission is to give people the power to build community and bring the world closer together. People use Facebook to stay connected with friends and family, to discover what's going on in the world, and to share and express what matters to them.](https://newsroom.fb.com/company-info/)
+
+Note that Facebook does not include marketing revenue in their mission statement, but according to their [`2016 Annual Report`](http://d18rn0p25nwr6d.cloudfront.net/CIK-0001326801/80a179c9-2dea-49a7-a710-2f3e0f45663a.pdf) **"We generate substantially all of our revenue from advertising."**
+
+Further Facebook makes the claim [Your people are here](https://www.facebook.com/business/products/ads) due to their [statistics](https://newsroom.fb.com/company-info/) of:
+
+
+- 1.28 billion daily active users on average for March 2017
+- 1.94 billion monthly active users as of March 31, 2017
+
+
+Facebook's dependency on advertising revenue and their reach into billions of people's lives, make analyzing data from a company purchasing ads with Facebook an intesting area to gain understanding, as this information is not only important to the companies that are paying for these services, but they are key to health of Facebook as a company.  
+
+Given this interest, we will be exploring a dataset found at [UIC's Machine Learning Repository](http://archive.ics.uci.edu/ml/datasets/Facebook+metrics), which has been included [`facebook.csv`](facebook.csv) alternatively a project .zip file can be downloaded from [here](http://archive.ics.uci.edu/ml/machine-learning-databases/00368/Facebook_metrics.zip) containing a representative data set that collected published posts of a Facebook page of a worldwide renowned cosmetic brand.
+
+
+### Exploration
+When examining this data, we recall
+
+"Marketers pay for ad products either directly or through their relationships with advertising agencies, based on **the number of clicks made by people, the number of actions taken by people, or the number of impressions delivered.** We recognize revenue from the delivery of click-based ads in the period in which a person clicks on the content, and action-based ads in the period in which a person takes the action the marketer contracted for." (http://d18rn0p25nwr6d.cloudfront.net/CIK-0001326801/80a179c9-2dea-49a7-a710-2f3e0f45663a.pdf)
+
+We considered that "The number of people who clicked anywhere in a post (Lifetime.post.consumers)" are potencial comsumers of the product. We would like to explore what other variable (e.g. Total page likes) would predict or have correletions with this response variable.
+
+
+### Description of the dataset
+This dataset contains a total of 500 published posted.  One of the posts included contains NA information 
+In this data set, it contained a total of 500
+posts published. We deleted one post since it has NA information in its variables. Therefore, a total of 499 posts were observed in the data set. Also, all the posts were published between the 1st of January and the 31th of December
+of 2014. 
+
+#### Potential Response Variable 
+Lifetime post consumers: The number of people who clicked anywhere in a post. 
+
+#### Potential Predictor Variables 
+* Lifetime post total reach: The number of people who saw a page post (unique users).
+* Lifetime post total impressions: Impressions are the number of times a post from a page is displayed, whether the post is clicked or not. People may see multiple impressions of the same post. For example, someone might see a Page update in News Feed once, and then a second time if a friend shares it.
+* Lifetime engaged users: The number of people who clicked anywhere in a post (unique users).
+* Lifetime post consumptions: The number of clicks anywhere in a post.
+* Lifetime post impressions by people who have liked a page: Total number of impressions just from people who have liked a page.
+* Lifetime post reach by people who like a page: The number of people who saw a page post because they have liked that page (unique users).
+* Lifetime people who have liked a page and engaged with a post: The number of people who have liked a Page and clicked anywhere in a post (Unique users). 
+* Comments: Number of comments on the publication. 
+* Likes: Number of "Likes" on the publication.
+* Shares: Number of times the publication was shared. 
+* Total interactions: The sum of "likes,""comments," and "shares" of the post.
+
+(Some descriptions refer to: https://www.facebook.com/help/274400362581037)
+
+```{r, fig.height=50, fig.width=50}
+fb = read.table("facebook.csv", sep = ";", header = T)
+head(fb[,11])
+```
+
+
+
+# REFERENCES
+Zach - yours were very nice - can you clean this up?

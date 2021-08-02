@@ -1,0 +1,985 @@
+---
+author: "Jianye Han (jianyeh2), Zach Litz (zlitz2), Megan Masanz (mjneuman)"
+date: "July 29, 2017"
+title: "Team Project: Data Analysis Project Report: Consumer Attractions In Social Network Era"
+output: html_document
+---
+
+# **I**. Introduction
+
+In this project, we will be examining a dataset [1] that contains social media information for a particular cosmetics brand. The data contains information about posts that were published on the brand's Facebook page during the year of 2014. There are approximately 500 records in this dataset (prior to any cleaning).
+
+
+The information includes what would be expected from social media page metrics such as `Page total like`, `Lifetime Post Consumption`, `Total Interactions`, `Post Month`, and `Type` (see [Table A.1] for a complete list of variables).
+
+
+We are particularly interested in the variable `Lifetime Post Consumers`. This variable gives the total number of clicks anywhere in a post over the post's lifetime. Our goal is to create a multiple regression model that explains the `Lifetime Post Consumers` variable based on the other variables.
+
+
+It is widely understood that Facebook marketing is an important tool used by modern data businesses in order to create social awareness and increase revenue. For this project, we are operating under the assumption that `Lifetime Post Consumers` is a good metric for evaluating how effective a Facebook post is in achieving advertising goals. In other words, a large value for `Lifetime Post Consumers` corresponds to a high social awareness which can lead to increased revenue. Thus, it seems to be beneficial to understand how `Lifetime Post Consumers` is explained by the other variables in the dataset in an effort to increase `Lifetime Post Consumers`.
+
+
+Because our goal is to explain `Lifetime Post Consumers`, we will try to find the smallest model that gives good results. We are interested in a smaller and simpler model in order to ensure the model is understandable. To do this, we will use various techniques for model selection and quality criteria. These techniques will be described in the methods section.
+
+# **II**. Methods
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# We will begin by loading all packages that will be used in this report.
+library(MASS)
+library(readr)
+library(lmtest)
+library(car)
+library(knitr)
+library(faraway)
+source("./helpers.r")
+
+# Numeric display options
+options(scipen=1, digits=2)
+```
+
+```{r echo=FALSE}
+# Load the data as is
+original_data <- read.csv("./data/dataset_Facebook.csv", header = TRUE, sep = ";")
+
+# Remove incomplete records
+complete_data <- original_data[complete.cases(original_data), ]
+removed_count <- nrow(original_data) - nrow(complete_data)
+
+# Convert numerical categories to factors
+complete_data$Type <- as.factor(complete_data$Type)
+complete_data$Category <- as.factor(complete_data$Category)
+complete_data$Post.Month <- as.factor(complete_data$Post.Month)
+complete_data$Post.Hour <- as.factor(complete_data$Post.Hour)
+complete_data$Post.Weekday <- as.factor(complete_data$Post.Weekday)
+complete_data$Paid <- as.factor(complete_data$Paid)
+
+# Remove correlated varaible "Total.Interactions"
+complete_data = subset(complete_data, select = -c(Total.Interactions))
+```
+
+
+
+The first step in our analysis is to prepare the data. The data is prepared as follows:  
+
+1. Remove all incomplete records. For our purposes, an incomplete record is any record which has empty or NA values. This steps results in a total of `r removed_count` records being removed.    
+2. Convert numeric categorical variables to proper factors. We convert    
+    * `Type`    
+    * `Category`    
+    * `Post Month`    
+    * `Post Hours`    
+    * `Post Weekday`   
+    * `Paid`    
+3. Remove the `Total Interactions` variable because it is perfectly correlated with the response.   
+
+
+
+### Variable Exploration
+
+#### The Additive Model
+
+Our first step into exploring and analyzing this data is to create a full additive model. This additive model will include all predictors in the dataset. There are no transformations or interactions. (See [Table A.1] for a complete description of variables). The response variable is `Lifetime Post Consumers`.
+
+```{r}
+full_additive_model <- lm(Lifetime.Post.Consumers ~ ., data = complete_data)
+```
+
+
+We begin our analysis by trying to develop an understanding of how the predictor variables relate to each other. Here we will look at $R^2_j$ and the variance inflation factor (VIF). This information will help us understand the effect of collinearity on the variance of the regression estimates, as well as the proportion of observed variation each predictor as explained by the other predictors. [Table 2.1] shows the $R^2_j$ and VIF values for each applicable predictor used in the fully additive model (note that categorical predictors have `NA` values).
+
+####Table 2.1
+```{r echo=FALSE, messages=FALSE}
+predictor_var_names <- names(complete_data)[names(complete_data) != "Lifetime.Post.Consumers"]
+rj_squared_and_vif <- helpers.r_j_squared_and_vif(predictor_var_names, complete_data)
+
+kable(rj_squared_and_vif, caption = "Table 2.1 - Rj^2 and VIF values for full additive model")
+```
+
+The high $R^2_j$ values in [Table 2.1] show that each given predictor can be explained by other predictors. This suggest that we can remove some of the predictors from this model. The high VIF values indicate that our estimates of the $\beta$ parameters are going to be highly variable. This high variability is undesirable given our goal of using the model for explanation. Having established that this is a poor model for explanation, we will begin to simplify the model.
+
+
+#### Additive Model Selection
+
+We will start the selection process by using the R `step()` function to perform  forward and backward searches. In addition to doing AIC and BIC searches, we will also do a forward search using 0 penalty which means only RSS matters (lower RSS wins). Instead of taking the model returned by the `step()` function, we will keep a list of the models selected at each step. Then we will perform ANOVA F-tests for each group of models to find the smallest model that is significant. This will give us the five models described in table 2.2. We will then find the best model from this group which will be used for the next step.
+
+####Table 2.2
+```{r, echo=FALSE}
+table_data <- data.frame(
+    Model = c("rss_fwd_model", "aic_fwd_model", "bic_fwd_model", "aic_bwd_model", "bic_bwd_model"),
+    Description = c(
+        "Smallest significant model found using forward search with no penalty",
+        "Smallest significant model found using forward search with penalty 2P",
+        "Smallest significant model found using forward search with penalty log(n)",
+        "Smallest significant model found using backward search with penalty 2p",
+        "Smallest significant model found using backward search with penalty log(n)"
+    )
+)
+
+kable(table_data, caption = "Table 2.2 - Model Selection Description")
+```
+
+
+```{r, message=FALSE, warning=FALSE, include=FALSE}
+
+# This is the full additive formula, using all predictors
+full_additive_formula <- Lifetime.Post.Consumers  ~ Page.total.likes + Type + Category + Post.Month + Post.Weekday + Post.Hour + Paid + Lifetime.Post.Total.Reach + Lifetime.Post.Total.Impressions + Lifetime.Engaged.Users + Lifetime.Post.Consumptions + Lifetime.Post.Impressions.by.people.who.have.liked.your.Page + Lifetime.Post.reach.by.people.who.like.your.Page + Lifetime.People.who.have.liked.your.Page.and.engaged.with.your.post + comment + like + share
+
+# The initial model with which to start our forward selection
+initial_fwd_model <- lm(Lifetime.Post.Consumers ~ 1, data = complete_data)
+
+# The initial backward model
+initial_bwd_model <- lm(full_additive_formula, data = complete_data)
+
+# Get all models using forward selection with different penalties
+rss_fwd_models <- helpers.step_model_selection(initial_fwd_model, scope = full_additive_formula, penalty = 0, isBackward = FALSE)
+aic_fwd_models <- helpers.step_model_selection(initial_fwd_model, scope = full_additive_formula, penalty = 2, isBackward = FALSE)
+bic_fwd_models <- helpers.step_model_selection(initial_fwd_model, scope = full_additive_formula, penalty = log(length(resid(initial_fwd_model))), isBackward = FALSE)
+
+# Get all models using backward selection
+aic_bwd_models <- helpers.step_model_selection(initial_bwd_model, scope = NA, penalty = 2, isBackward = TRUE)
+bic_bwd_models <- helpers.step_model_selection(initial_bwd_model, scope = NA, penalty = log(length(resid(initial_fwd_model))), isBackward = TRUE)
+
+
+# Use ANOVA F-test to get smallest models possible
+rss_fwd_model <- helpers.anova_selection(rss_fwd_models, 0.05)
+aic_fwd_model <- helpers.anova_selection(aic_fwd_models, 0.05)
+bic_fwd_model <- helpers.anova_selection(bic_fwd_models, 0.05)
+aic_bwd_model <- helpers.anova_selection(aic_bwd_models, 0.05)
+bic_bwd_model <- helpers.anova_selection(bic_bwd_models, 0.05)
+```
+
+Running through this process gives us five models.  
+
+The `rss_fwd_model` (which uses the forward selection process with no penalty, meaning only RSS matters) has the predictors:
+```{r, echo=FALSE, comment=""}
+rss_fwd_model$call$formula[[3]]
+```
+
+
+The `aic_fwd_model` has the predictors: 
+```{r, echo=FALSE, comment=""}
+aic_fwd_model$call$formula[[3]]
+```
+
+
+The `bic_fwd_model` has the predictors: 
+```{r, echo=FALSE, comment=""}
+bic_fwd_model$call$formula[[3]]
+```
+
+The `aic_bwd_model` has the predictors: 
+```{r, echo=FALSE, comment=""}
+aic_bwd_model$call$formula[[3]]
+```
+
+The `bic_bwd_model` has the predictors: 
+```{r, echo=FALSE, comment=""}
+bic_bwd_model$call$formula[[3]]
+```
+
+Once again, we will look at the $R^2_j$ and VIF values for the models. [Table 2.3], [Table 2.4], [Table 2.5], [Table 2.6], and [Table 2.7] show these values for the `rss_fwd_model`, `aic_fwd_model`, `bic_fwd_model`, `aic_bwd_model`, and `bic_bwd_model` respectively.
+
+Note that the categorical variables will be displayed in the table as `NA`, this is due to the fact that these predictors will add many variables into the model.  For a categorical variable with k categories, it will introduce k-1 predictor variables, so for simplicity of analysis, these will be looked at seperately during our analysis in section [Categorical Predictors].
+
+
+####Table 2.3
+```{r echo=FALSE, messages=FALSE}
+predictor_var_names <- all.vars(rss_fwd_model$call$formula[[3]])
+rj_squared_and_vif <- helpers.r_j_squared_and_vif(predictor_var_names, complete_data)
+rss_fwd_large_vif <- rj_squared_and_vif[rj_squared_and_vif$vif > 5, ]
+kable(rj_squared_and_vif, caption = "Table 2.3 - Rj^2 and VIF values for rss_fwd_model")
+```
+
+
+####Table 2.4
+```{r echo=FALSE, messages=FALSE}
+predictor_var_names <- all.vars(aic_fwd_model$call$formula[[3]])
+rj_squared_and_vif <- helpers.r_j_squared_and_vif(predictor_var_names, complete_data)
+aic_fwd_large_vif <- rj_squared_and_vif[rj_squared_and_vif$vif > 5,]
+kable(rj_squared_and_vif, caption = "Table 2.4 - Rj^2 and VIF values for aic_fwd_model")
+```
+
+####Table 2.5
+```{r echo=FALSE, messages=FALSE}
+predictor_var_names <- all.vars(bic_fwd_model$call$formula[[3]])
+rj_squared_and_vif <- helpers.r_j_squared_and_vif(predictor_var_names, complete_data)
+bic_fwd_large_vif <- rj_squared_and_vif[rj_squared_and_vif$vif > 5,]
+kable(rj_squared_and_vif, caption = "Table 2.5 - Rj^2 and VIF values for bic_fwd_model")
+```
+
+
+####Table 2.6
+```{r echo=FALSE, messages=FALSE}
+predictor_var_names <- all.vars(aic_bwd_model$call$formula[[3]])
+rj_squared_and_vif <- helpers.r_j_squared_and_vif(predictor_var_names, complete_data)
+aic_bwd_large_vif <- rj_squared_and_vif[rj_squared_and_vif$vif > 5,]
+kable(rj_squared_and_vif, caption = "Table 2.6 - Rj^2 and VIF values for aic_bwd_model")
+```
+
+####Table 2.7
+```{r echo=FALSE, messages=FALSE}
+predictor_var_names <- all.vars(bic_bwd_model$call$formula[[3]])
+rj_squared_and_vif <- helpers.r_j_squared_and_vif(predictor_var_names, complete_data)
+bic_bwd_large_vif <- rj_squared_and_vif[rj_squared_and_vif$vif > 5,]
+kable(rj_squared_and_vif, caption = "Table 2.7 - Rj^2 and VIF values for bic_bwd_model")
+```
+
+
+We can see in tables 2.4 to 2.7 that the variance inflation factors are greatly improved. If we consider a VIF larger than 5 to indicate mulitcollinearity issues, then we can count the number of large VIFs for each models as:  
+
+* `rss_fwd_model`: `r nrow(rss_fwd_large_vif)` VIFs greater than 5
+* `aic_fwd_model`: `r nrow(aic_fwd_large_vif)` VIFs greater than 5
+* `bic_fwd_model`: `r nrow(bic_fwd_large_vif)` VIFs greater than 5
+* `aic_bwd_model`: `r nrow(aic_bwd_large_vif)` VIFs greater than 5
+* `bic_bwd_model`: `r nrow(bic_bwd_large_vif)` VIFs greater than 5
+
+It is easy to see that all of the models have much less collinearity issues than the original full additive model (based on the much smaller VIF values).
+
+
+Given both the `rss_fwd_model` and the `aic_fwd_model` model included `Post.Month` as a categorical variable that was included in the model, we will explore introducing this categorical variable into the model and the possibility of interaction with the other variables.
+
+```{r}
+
+```
+
+
+
+Table 2.8 shows the variables included in each of the five models.
+
+```{r, echo=FALSE}
+all_vars <- all.vars(full_additive_formula[[3]])
+rss_fwd_vars <- all.vars(rss_fwd_model$call$formula[[3]])
+aic_fwd_vars <- all.vars(aic_fwd_model$call$formula[[3]])
+bic_fwd_vars <- all.vars(bic_fwd_model$call$formula[[3]])
+aic_bwd_vars <- all.vars(aic_bwd_model$call$formula[[3]])
+bic_bwd_vars <- all.vars(bic_bwd_model$call$formula[[3]])
+
+vars_in_rss_fwd <- all_vars %in% rss_fwd_vars
+vars_in_aic_fwd <- all_vars %in% aic_fwd_vars
+vars_in_bic_fwd <- all_vars %in% bic_fwd_vars
+vars_in_aic_bwd <- all_vars %in% aic_bwd_vars
+vars_in_bic_bwd <- all_vars %in% bic_bwd_vars
+
+vars_summary <- data.frame(all_vars, vars_in_rss_fwd, vars_in_aic_fwd, vars_in_bic_fwd, vars_in_aic_bwd, vars_in_bic_bwd)
+
+col_names <- c(
+    "Variable",
+    "RSS Forward",
+    "AIC Forward",
+    "BIC Forward",
+    "AIC Backward",
+    "BIC Backward"
+)
+
+```
+####Table 2.8
+```{r, echo=FALSE}
+knitr::kable(vars_summary, col.names = col_names,  caption = "Table 2.8 - MLR Additive Model Variable Analysis")
+```
+
+[Table 2.8] gives us more of an idea on which variables should be used in our analysis. We will look at these variables more closely by creating a pairs plot that includes only the variables that are common to all models.
+
+```{r, echo=FALSE, fig.height=20, fig.width=10, fig.cap="Figure 2.1 - Pairs Plot of Important Variables", fig.align="center"}
+# Create the set of variables that is the intersection of the vaiables included in each model
+var_intersection = all_vars[vars_in_rss_fwd & vars_in_aic_fwd & vars_in_bic_fwd & vars_in_aic_bwd & vars_in_bic_bwd]
+
+# Need to add back in the response
+var_intersection = c("Lifetime.Post.Consumers", var_intersection)
+
+# Subset the data
+complete_subset <- subset(complete_data, select = var_intersection)
+
+# Plot the data
+pairs(complete_subset, col = "dodgerblue")
+```
+
+While the pairs plot provide an idea regarding the variables of interest.[Table 2.8] highlights we have 5 key variables of interest that are not categorical predictors.  These include
+
+- share
+- like
+- comment
+- Lifetime.People.who.have.liked.your.Page.and.engaged.with.your.post
+- Lifetime.Engaged.Users
+
+There are 2 variables we should explore futher namely:
+- Lifetime.Post.Impressions.by.people.who.have.liked.your.Page
+- Lifetime.Post.reach.by.people.who.like.your.Page
+
+The 2 variables listed above were found in the `AIC Forward`, `BIC Forward`, `AIC Backward` and `BIC Backward` models, but not in the `RSS Forward` model.  To better understand these variables we can look at a variables added plot to help understand if these predictors should be considered with further investigation.
+
+```{r}
+PostImpressionsModel = lm(Lifetime.Post.Impressions.by.people.who.have.liked.your.Page ~ 
+                        Lifetime.Engaged.Users + like + 
+                        share + Lifetime.People.who.have.liked.your.Page.and.engaged.with.your.post + 
+                        comment, data  = complete_data)
+
+ModelWOutImpressions = lm(Lifetime.Post.Consumers  ~ Lifetime.Engaged.Users + like + 
+                            share + Lifetime.People.who.have.liked.your.Page.and.engaged.with.your.post 
+                          + comment, data  = complete_data)
+```
+
+```{r.echo=FALSE, fig.width=10, fig.cap=" Figure 2.1 - Fitted vs Residual Plots for adding Lifetime.Post.Impressions.by.people.who.have.liked.your.Page", fig.align="center"}
+plot(resid(ModelWOutImpressions) ~ resid(PostImpressionsModel), col = "dodgerblue", pch = 20,
+     xlab = "Residuals, Added Predictor", ylab = "Residuals, Original Model")
+abline(h = 0, lty = 2)
+abline(v = 0, lty = 2)
+abline(lm(resid(ModelWOutImpressions) ~ resid(PostImpressionsModel)),
+       col = "darkorange", lwd = 2)
+```
+
+The partial correlation coefficient of `Lifetime.Post.Impressions.by.people.who.have.liked.your.Page` and `Lifetime.Post.Consumers` with the effects of the other variables in the model removed with a value of `r cor(resid(PostImpressionsModel), resid(ModelWOutImpressions))` serves as additional justication that this predictors should not end up in our final selected model.
+
+```{r}
+cor(resid(PostImpressionsModel), resid(ModelWOutImpressions))
+```
+
+
+Futher investigation on `Lifetime.Post.reach.by.people.who.like.your.Page` 
+```{r.echo=FALSE, fig.width=10, fig.cap=" Figure 2.2 - Fitted vs Residual Plots for adding Lifetime.Post.reach.by.people.who.like.your.Page", fig.align="center"}
+
+PostReachbyPeople = lm(Lifetime.Post.reach.by.people.who.like.your.Page ~ 
+                        Lifetime.Engaged.Users + like + 
+                        share + Lifetime.People.who.have.liked.your.Page.and.engaged.with.your.post + 
+                        comment, data  = complete_data)
+
+ModelWOutPostReachbyPeople = lm(Lifetime.Post.Consumers  ~ Lifetime.Engaged.Users + like + 
+                            share + Lifetime.People.who.have.liked.your.Page.and.engaged.with.your.post 
+                          + comment, data  = complete_data)
+
+
+plot(resid(ModelWOutPostReachbyPeople) ~ resid(PostReachbyPeople), col = "dodgerblue", pch = 20,
+     xlab = "Residuals, Added Predictor", ylab = "Residuals, Original Model")
+abline(h = 0, lty = 2)
+abline(v = 0, lty = 2)
+abline(lm(resid(ModelWOutPostReachbyPeople) ~ resid(PostReachbyPeople)),
+       col = "darkorange", lwd = 2)
+```
+
+
+```{r}
+cor(resid(PostReachbyPeople), resid(ModelWOutPostReachbyPeople))
+```
+
+This information provide clarity that we should exclude these two predictor variables from further analysis.
+
+#### Categorical Predictors
+
+Both the `rss_fwd_model` and the `aic_fwd_model` included `Post.Month` as a possible predictor.  Below we consider the `rss_fwd_model` as the `full_model` and an MLR model without Post.Month as the null model and confirm that the preferred model does include the predictor `Post.Month`, however, looking at the p-values for each of the individual dummy variables in the model for Post.Month - we see that with the other predictors in the model, these are not actually significant.
+```{r}
+null_model = lm(Lifetime.Post.Consumers ~ Lifetime.Engaged.Users + like + 
+                  share + Lifetime.People.who.have.liked.your.Page.and.engaged.with.your.post +
+                  comment, data = complete_data)
+
+full_model = lm(Lifetime.Post.Consumers ~ Lifetime.Engaged.Users + like + 
+                  share + Lifetime.People.who.have.liked.your.Page.and.engaged.with.your.post +
+                  comment + Post.Month, data = complete_data)
+
+anova(null_model, full_model)$"Pr(>F)"[2]
+```
+
+```{r, echo=FALSE}
+null_model = lm(Lifetime.Post.Consumers ~ Lifetime.Engaged.Users + like + 
+                  share + Lifetime.People.who.have.liked.your.Page.and.engaged.with.your.post +
+                  comment, data = complete_data)
+
+full_model = lm(Lifetime.Post.Consumers ~ Lifetime.Engaged.Users + like + 
+                  share + Lifetime.People.who.have.liked.your.Page.and.engaged.with.your.post +
+                  comment + Post.Month, data = complete_data)
+
+anova(null_model, full_model)$"Pr(>F)"[2]
+
+str = c("Post.Month2", "Post.Month3", "Post.Month4", "Post.Month5", "Post.Month6", "Post.Month7", "Post.Month8",
+        "Post.Month9","Post.Month10", "Post.Month11", "Post.Month12")
+pvales = c(summary(full_model)$coefficients["Post.Month2", "Pr(>|t|)"],summary(full_model)$coefficients["Post.Month3", "Pr(>|t|)"],
+           summary(full_model)$coefficients["Post.Month4", "Pr(>|t|)"],summary(full_model)$coefficients["Post.Month5", "Pr(>|t|)"],
+           summary(full_model)$coefficients["Post.Month6", "Pr(>|t|)"],summary(full_model)$coefficients["Post.Month7", "Pr(>|t|)"],
+           summary(full_model)$coefficients["Post.Month8", "Pr(>|t|)"],summary(full_model)$coefficients["Post.Month9", "Pr(>|t|)"],
+           summary(full_model)$coefficients["Post.Month10", "Pr(>|t|)"],summary(full_model)$coefficients["Post.Month11", "Pr(>|t|)"],
+           summary(full_model)$coefficients["Post.Month12", "Pr(>|t|)"])
+month_vars_summary = cbind(str, pvales)
+
+col_names = c("Month", "p-value")
+
+knitr::kable(month_vars_summary, col.names = col_names,  caption = "Table 2.9 - Categorical Post.Month p-values")
+
+```
+
+Given adding these would explode our model, we will explore the possibility of adding either `Post.Month12` or `Post.Month11` given these 2 have the lowest p-values of all the the months.
+
+```{r}
+PostMonth12 = 1 * as.numeric(complete_data$Post.Month == "12")
+PostMonth11 = 1 * as.numeric(complete_data$Post.Month == "11")
+
+complete_data = cbind(complete_data, PostMonth12,  PostMonth11)
+
+
+model_month = lm(Lifetime.Post.Consumers  ~ Lifetime.Engaged.Users + like + 
+                            share + Lifetime.People.who.have.liked.your.Page.and.engaged.with.your.post 
+                          + comment + Post.Month, data = complete_data)
+
+model_base = lm(Lifetime.Post.Consumers  ~ Lifetime.Engaged.Users + like + 
+                            share + Lifetime.People.who.have.liked.your.Page.and.engaged.with.your.post 
+                          + comment , data  = complete_data)
+                   
+model_month11 = lm(Lifetime.Post.Consumers  ~ Lifetime.Engaged.Users + like + 
+                            share + Lifetime.People.who.have.liked.your.Page.and.engaged.with.your.post 
+                          + comment + PostMonth11, data  = complete_data)
+
+model_month12 = lm(Lifetime.Post.Consumers  ~ Lifetime.Engaged.Users + like + 
+                            share + Lifetime.People.who.have.liked.your.Page.and.engaged.with.your.post 
+                          + comment + PostMonth12, data  = complete_data)
+
+modelWMonths = lm(Lifetime.Post.Consumers  ~ Lifetime.Engaged.Users + like + 
+                            share + Lifetime.People.who.have.liked.your.Page.and.engaged.with.your.post 
+                          + comment + PostMonth11 + PostMonth12, data  = complete_data)
+
+
+anova(model_base, model_month11)$"Pr(>F)"[2]
+anova(model_base, model_month12)$"Pr(>F)"[2]
+
+vif(model_month11)
+vif(model_month12)
+vif(modelWMonths)
+
+AIC = c(extractAIC(model_base)[2],  extractAIC(model_month)[2],extractAIC(model_month11)[2],
+        extractAIC(model_month12)[2], extractAIC(modelWMonths)[2])
+
+ModelDesc = c("Model with 5 predictors", "Model with 5 predictors and all months", "Model with 5 predictors and Month 11", "Model with 5 predictors and Month 12", "Model with 5 predictors and Month 11 and 12")
+
+data = cbind(ModelDesc, AIC)
+
+col_names = c("Model", "AIC value")
+
+knitr::kable(data, col.names = col_names,  caption = "Table 2.10 Month as a Predictor")
+
+```
+
+The table above is a clear indication that `Month11` and `Month12` are good predictor variables to include in our model analysis.  We will continue to proceed with the five models previously selected, and then add in these parameters as it makes sense during our analysis.
+
+
+With the pairs plot shown in figure 2.1, we can see some obvious relationships. We can also quickly see the order of magnitude on the response variable suggests we should also do a Box-Cox plot to determine if perhaps the response should be transformed (given a span of multiple orders of magnitude, we are probably looking at a log transform).
+
+#### Model Transformations
+
+We start by looking at the Box-Cox plots for each of our models.
+
+```{r echo=FALSE, fig.width=10, fig.cap="Figure 2.3 - Box-Cox Plot for rss_fwd_model", fig.align="center"}
+boxcox(rss_fwd_model, plotit = TRUE, lambda = seq(0.7,1.3, by = 0.05))
+```
+
+```{r echo=FALSE, fig.width=10, fig.cap="Figure 2.4 - Box-Cox Plot for aic_fwd_model", fig.align="center"}
+boxcox(aic_fwd_model, plotit = TRUE, lambda = seq(0.7,1.3, by = 0.05))
+```
+
+```{r echo=FALSE, fig.width=10, fig.cap="Figure 2.5 - Box-Cox Plot for bic_fwd_model", fig.align="center"}
+boxcox(bic_fwd_model, plotit = TRUE, lambda = seq(0.7,1.3, by = 0.05))
+```
+
+```{r echo=FALSE, fig.width=10, fig.cap=" Figure 2.6 - Box-Cox Plot for aic_bwd_model", fig.align="center"}
+boxcox(aic_bwd_model, plotit = TRUE, lambda = seq(0.7,1.3, by = 0.05))
+```
+
+```{r echo=FALSE, fig.width=10, fig.cap=" Figure 2.7 - Box-Cox Plot for bic_bwd_model", fig.align="center"}
+boxcox(bic_bwd_model, plotit = TRUE, lambda = seq(0.7,1.3, by = 0.05))
+```
+
+Figures 2.3 to 2.7 show the Box-Cox plots for each of the five additive models. We can see that in all plots the calculated $\lambda$ is very close to 1. This suggests that the Box-Cox method does not necessarily indicate that a transform is needed. To understand if this transformation may still be of interest, we will examine the Fitted vs Residual Plots, and the Q-Q plots for the 5 models previously selected.
+
+```{r}
+diagnostics = function(model, pcol= 2, lcol = 1, alpha = 0.05, plotit = TRUE, testit = TRUE){
+  if (plotit == TRUE){
+    par(mfrow = c(1, 2))
+    plot(fitted(model), resid(model), col = pcol, pch = 20,
+         xlab = "Fitted", ylab = "Residuals", main = "Fitted vs Residuals")
+    abline(h = 0, col = lcol, lwd = 2)
+    qqnorm(resid(model), main = "Normal Q-Q Plot", col = pcol)
+    qqline(resid(model), col = lcol, lwd = 2)
+  }
+  if (testit == TRUE){
+    shapiro_p_value = shapiro.test(resid(model))$p.value
+    bp_p_value      = bptest(model)$p.value 
+    bp_decision      = ifelse(bp_p_value < alpha, "Reject Equal Variance - Bad", "Fail to Equal Variance-Good")
+    shapiro_decision = ifelse(shapiro_p_value < alpha, "Reject Normality - Bad", "Fail to Reject Normality- Good")
+    
+    return_val = list(shapiro_p_value = shapiro_p_value, bp_p_value = bp_p_value, bp_decision = bp_decision, shapiro_decision = shapiro_decision)
+    return_val
+  }
+}
+```
+
+In the fitted vs residuls plots shown above for the model `rss_fwd_model`, we do appear to see an increasing variance.
+
+```{r echo=FALSE, fig.width=10, fig.cap=" Figure 2.8 - blah", fig.align="center"}
+diagnostics(rss_fwd_model, pcol = "darkorange", lcol = "dodgerblue", plotit = TRUE)
+diagnostics(aic_fwd_model, pcol = "darkorange", lcol = "dodgerblue", plotit = TRUE)
+diagnostics(bic_fwd_model, pcol = "darkorange", lcol = "dodgerblue", plotit = TRUE)
+diagnostics(aic_bwd_model, pcol = "darkorange", lcol = "dodgerblue", plotit = TRUE)
+diagnostics(bic_bwd_model, pcol = "darkorange", lcol = "dodgerblue", plotit = TRUE)
+```
+
+While the residuals appear in general to be centered around 0, we can see there does appear to be a pattern of increasing variance as the fitted values increase, suggesting that a log transformation of the response variable could be helpful.With this information, and given that we have variables that span multiple orders of magnitude, we are going to continue with trying different model transformations. 
+
+
+We will start the transforms by doing a log transform of the response. Figure 2.7 shows another pairs plot with the transform added.
+
+```{r, echo=FALSE,  fig.height=20, fig.width=10, fig.cap="Figure 2.1 - Pairs Plot of Important Variables", fig.align="center"}
+# Add the transform
+
+
+# Subset the data
+fb_subset = subset(complete_data, select = c("Lifetime.Post.Consumers", "Lifetime.Engaged.Users", "Lifetime.Post.Consumptions", "Lifetime.People.who.have.liked.your.Page.and.engaged.with.your.post", "comment", "like", "share", "PostMonth12", "PostMonth11"))
+
+log.Consumers = log(fb_subset$Lifetime.Post.Consumers)
+
+fb_withResponseTransform = cbind( fb_subset, log.Consumers)
+#Plot the data
+pairs(fb_withResponseTransform, col = "dodgerblue")
+
+
+
+```
+
+Figure 2.7 reveals that the log transform of the response has what appears to be either log or polynomial relationships with some of the predictors. Given that we currently only have five numeric predictors of interest, we can write a function to build and compare different simple models using a some basic transforms. We will do this to compare models using 2nd and 3rd order polynomial transforms and log transforms for each predictor of interest.
+
+
+```{r, echo=FALSE, warning=TRUE}
+analyze_log_response_models <- function(models) {
+    # This will analyze the models in the list using adjusted testing and training data.
+    #
+    # Args:
+    #   models: A list of model objects created with lm() function usign a log response
+    #
+    # Returns:
+    #   A data.frame with "formula", "shapiro", "bp", "rmse", "test_rmse", "adj_r_squared"
+    
+    model_count <- length(models)
+    
+    # We need a datafram to hold all the models and calculations we are going to do
+    analyzed_data <- data.frame(
+        formula = as.character(rep("", model_count)),
+        shapiro = rep(0, model_count),
+        bp = rep(0, model_count),
+        #rmse = rep(0, model_count),
+        #test_rmse = rep(0, model_count),
+        loocv_rmse = rep(0, model_count),
+        adj_r_squared = rep(0, model_count)
+    )
+
+    analyzed_data$formula = as.character(analyzed_data$formula)
+
+    response <- adj_complete_data$Lifetime.Post.Consumers
+    #test_response <- adj_complete_data$Lifetime.Post.Consumers
+    
+    for (i in 1:model_count) {
+        current_model <- models[[i]]
+     
+        analyzed_data$formula[i] <- helpers.make_formula_string(current_model)
+        
+        a <- helpers.analyze_model(current_model)
+        
+        # Save the shapiro test results
+        analyzed_data$shapiro[i] = a$shapiro_p_value
+
+        # Save the BP test results
+        analyzed_data$bp[i] = a$bp_p_value
+        
+        # Save the RMSE results
+        #analyzed_data$rmse[i] = a$rmse
+        
+        # Save the test data RMSE results
+        #analyzed_data$test_rmse[i] = a$test_rmse
+
+        analyzed_data$loocv_rmse[i] = a$loocv_rmse
+    
+        # Save the adjusted R^2 results
+        analyzed_data$adj_r_squared[i] = a$adj_r_squared
+       
+    }
+    
+    return (analyzed_data)
+}
+```
+
+```{r, echo=FALSE}
+
+
+
+# Create a vector that contains the variables we which to run through the model bulding function
+predictors <- c(
+    "Lifetime.Engaged.Users",
+    "Lifetime.People.who.have.liked.your.Page.and.engaged.with.your.post",
+    "comment",
+    "like",
+    "share")
+
+
+predictor_count <- length(predictors)
+
+
+# We need to remove 0 values to do log transform. To do that we just shift everything by one. 
+# This has pretty negligble affect given the data
+adj_complete_data <- complete_data
+adj_complete_data$comment <- adj_complete_data$comment + 1
+adj_complete_data$like <- adj_complete_data$like + 1
+adj_complete_data$share <- adj_complete_data$share + 1
+
+
+
+# Get a list of models using the transforms for each predictor
+transform_models <- list()
+for (i in 1:length(predictors)) {
+    
+    predictor_name <- predictors[i]
+    
+    offset <- (i - 1)*4
+    models <- helpers.model_builder(predictor_name, "Lifetime.Post.Consumers", adj_complete_data)
+    transform_models[[offset + 1]] <- models$second_order
+    transform_models[[offset + 2]] <- models$third_order
+    transform_models[[offset + 3]] <- models$log_1
+    transform_models[[offset + 4]] <- models$log_2
+}
+
+# Analyze the data
+analyzed_data <- analyze_log_response_models(transform_models)
+```
+
+####Table 2.9
+```{r, echo=FALSE}
+col_names <- c(
+    "Model Formula",
+    "Shapiro-Wilk p-value",
+    "BP p-value",
+    "LOOCV",
+
+    "R^2_adj"
+)
+
+
+kable(analyzed_data, row.names = FALSE, col.names = col_names, caption = "Table 2.9 - Transformation Analysis")
+```
+
+[Table 2.9] shows the results of building simple models using polynomial and log transforms for the predictors of interest. We can clearly see that some perform better than others depending on which metric we are looking at. 
+
+
+```{r}
+model_month11 = lm(log(Lifetime.Post.Consumers) ~ like + log(like) + log(share) + share 
+                 + PostMonth11, data = adj_complete_data)
+
+summary(model_month11)
+
+bptest(model_month11)
+
+shapiro.test(resid(model_month11))
+
+diagnostics(model_month11, pcol = "darkorange", lcol = "dodgerblue", plotit = TRUE)
+
+
+
+
+model_month11_b = lm(log(Lifetime.Post.Consumers) ~   log(like) +  
+                 + PostMonth11, data = adj_complete_data)
+
+summary(model_month11_b)
+
+bptest(model_month11_b)
+
+shapiro.test(resid(model_month11_b))
+
+diagnostics(model_month11_b, pcol = "darkorange", lcol = "dodgerblue", plotit = TRUE)
+
+
+##############
+model_month11_b = lm(log(Lifetime.Post.Consumers) ~   log(like) +  
+                 + PostMonth11, data = adj_complete_data)
+
+summary(model_month11_b)
+
+bptest(model_month11_b)
+
+shapiro.test(resid(model_month11_b))
+
+diagnostics(model_month11_b, pcol = "darkorange", lcol = "dodgerblue", plotit = TRUE)
+
+#####
+model_month11_c = lm(log(Lifetime.Post.Consumers) ~ like + log(like)  + share 
+                 + PostMonth11, data = adj_complete_data)
+
+summary(model_month11_c)
+
+bptest(model_month11_c)
+
+shapiro.test(resid(model_month11_c))
+
+diagnostics(model_month11_c, pcol = "darkorange", lcol = "dodgerblue", plotit = TRUE)
+
+####
+
+
+model_month11_d = lm(log(Lifetime.Post.Consumers) ~  + log(like)  + share  + PostMonth11, data = adj_complete_data)
+
+summary(model_month11_d)
+
+bptest(model_month11_d)
+
+shapiro.test(resid(model_month11_d))
+
+diagnostics(model_month11_d, pcol = "darkorange", lcol = "dodgerblue", plotit = TRUE)
+
+```
+
+Because we have a goal of using the model for explanation, we want to do our best to choose a model that meets the model assumptions (particularly the equal variance and normally distributed error assumptions). With this in mind, it makes sense to pick the models that pass the Shapiro-Wilk and the Breusch-Pagan tests. We can see from [Table 2.9] that there are only a handful of models that achieve this when using any reasonable value for $\alpha$. In this case we will choose all models that pass the tests with a $\alpha$ = 0.05. This gives us the single model:
+
+
+```{r, echo=FALSE, comment=""}
+passing_analyzed_data <- subset(analyzed_data, analyzed_data$shapiro > 0.05 & analyzed_data$bp > 0.05)
+#as.formula(passing_analyzed_data$formula)
+```
+
+Looking at [Table 2.9] we also see the models involving the `comment` predictor have non-zero p-values for the BP and Shapiro-Wilk tests. As an experiment, we will combine these predictors with the formula above to see if we can get a better result. Also, we will add the `paid` categorical predictor to the model (this will help explain the response in terms of paid and unpaid posts).
+
+####Table 2.10
+```{r, echo=FALSE}
+
+#models <- list(
+#    # Current best model
+#    lm(passing_analyzed_data$formula, data = adj_complete_data),
+#    # Experiment 1
+#    #lm(log(Lifetime.Post.Consumers) ~ like + log(like) + comment + I(comment^2) + I(comment^3), data = #adj_training_data),
+#    # Experiment 2
+    #lm(log(Lifetime.Post.Consumers) ~ like + log(like) + comment + I(comment^2) + I(comment^3) + Paid, data = adj_training_data),
+    # Experiment 3
+#    lm(log(Lifetime.Post.Consumers) ~ like + log(like) + comment + log(comment) + Paid, data = adj_complete_data),
+    # Experiment 4
+#    lm(log(Lifetime.Post.Consumers) ~ like + log(like) + comment + log(comment), data = adj_complete_data),
+    #Experiment 5
+#    lm(log(Lifetime.Post.Consumers) ~ like + log(like) + log(share) + share + PostMonth11, data = adj_complete_data),
+    #Experiment 6
+#    lm(log(Lifetime.Post.Consumers) ~ like + log(like) + log(share) + share + PostMonth12, data = adj_complete_data)
+    
+    
+    
+#)
+
+#analyzed_data <- analyze_log_response_models(models)
+
+
+#kable(analyzed_data, row.names = FALSE, col.names = col_names, caption = "Table 2.10 - Transformation Analysis #Expirement")
+```
+
+The results in [Table 2.10] show that our experiment did pay off. By adding the `comment` predictor and the `paid` categorical predictor we greatly increased the p-value for the Shapiro-Wilk test while still being able to pass the BP test with $\alpha$ = 0.05.
+
+The last thing we will do for our model selection is to revisit multiple collinearity and look at the $R^2_j$ and VIF values for our top performing models.
+
+
+```{r, echo=FALSE}
+
+#vif_data <- data.frame(
+#    formula = rep("", 5),
+#    max_vif = rep(0, 5),
+#    large_vif_count = rep(0, 5)
+#)
+
+#vif_data$formula <- as.character(vif_data$formula)
+
+#for (i in 1:length(models)) {
+#    
+#    current_model <- models[[i]]
+#    vif_vals <- vif(current_model)
+#    
+#    vif_data$max_vif[i] <- max(vif_vals)
+#    vif_data$large_vif_count[i] <- sum(vif_vals > 5)
+#    vif_data$formula[i] <- helpers.make_formula_string(current_model)
+#}
+#```
+
+####Table 2.11
+#```{r, echo=FALSE}
+#col_names <- c ("Model Formula", "Max VIF", "Number of Large VIFs")
+#kable(vif_data, col.names = col_names, caption = "Table 2.11 - Variance Inflation Factors")
+#```
+
+
+#Using the results in [Table 2.10] and [Table 2.11] we have made the decision to pick the model with the formula:
+#```{r, echo=FALSE, comment=""}
+#selected_model <- models[[4]]
+#selected_model$call$formula
+```
+
+
+```{r}
+# Split data into testing and training tests
+set.seed(0)
+test_indicies <- sample(1:nrow(adj_complete_data), nrow(adj_complete_data)/2)
+train_data    <- adj_complete_data[-test_indicies,]
+test_data     <- adj_complete_data[test_indicies,]
+
+model_month11 = lm(log(Lifetime.Post.Consumers) ~ like + log(like) + log(share) + share 
+                 + PostMonth11, data = train_data)
+
+range(adj_complete_data$like)
+range(adj_complete_data$share)
+range(adj_complete_data$Lifetime.Post.Consumers)
+
+diagnostics2 = function(strmodel, test, train){
+  model = lm(strmodel, data = train)
+  RMSE_Train = sqrt(mean((  (train$Lifetime.Post.Consumers - exp(fitted(model))) ^ 2)))
+  RMSE_Test  =  sqrt(mean((test$Lifetime.Post.Consumers - exp(predict(model, newdata = test))) ^ 2))
+
+  
+  data.frame(strmodel, RMSE_Train, RMSE_Test)
+}
+
+(diagnostics2("log(Lifetime.Post.Consumers) ~ like + log(like) + log(share) + share 
+                 + PostMonth11", test = test_data, train = train_data))
+
+(diagnostics2("log(Lifetime.Post.Consumers) ~  + log(like)  + share 
+                 + PostMonth11", test = test_data, train = train_data))
+
+(diagnostics2("log(Lifetime.Post.Consumers) ~ like", test = test_data, train = train_data))
+
+(diagnostics2("log(Lifetime.Post.Consumers) ~ Lifetime.Engaged.Users + log(Lifetime.Engaged.Users)", test = test_data, train = train_data))
+
+(diagnostics2("log(Lifetime.Post.Consumers) ~   log(like) +  
+                 + PostMonth11", test = test_data, train = train_data))
+
+
+(diagnostics2("log(Lifetime.Post.Consumers) ~  + log(like)  + share  + PostMonth11", test = test_data, train = train_data))
+
+
+
+```
+
+This model is fairly simple and includes an interesting categorical predictor. We can see in [Table 2.11] that it should not suffer from multicollinearity issues. We can also see from the Shapiro-Wilk and BP tests that it should meet the assumptions that the errors are normally distributed and have equal variance (although we would reject this based on BP test p-value with $\alpha$ = 0.05, we can see in the results that the QQ plot looks good). We also know that the regression is significant with a very small p-value.
+
+
+
+
+
+# **III**. Results
+
+TODO!!!!!!!
+
+
+TODO: beta confidence intervals
+### Confidence Intervals
+
+The confidence interval confirms what we were seeing.  While we would like to reject like and log(share) and share, removing them from the model then makes the model violate the normality and equal variance assumptions.
+
+```{r}
+confint(model_month11, level = 0.99)
+
+summary(model_month11)
+
+
+confint(model_month11, level = 0.73)
+
+summary(model_month11)
+
+confint(model_month11_d, level = 0.99)
+```
+
+ 
+TODO: add cooks distance info
+ 
+
+```{r}
+#qqnorm(resid(selected_model), main = "Normal Q-Q Plot (paid_model)", col = "dodgerblue")
+#qqline(resid(selected_model), col = "orange", lwd = 2)
+```
+
+```{r}
+#plot(fitted(selected_model), resid(selected_model), col = "dodgerblue", pch = 20,
+#            xlab = "Fitted", ylab = "Residuals", main = "Fitted vs. Residual Values (selected_model)")
+#abline(h = 0, col = "orange", lwd = 2)
+```
+
+# **IV**. Discussion
+
+TODO!!!!!!
+
+# References   
+[1] Moro et al., 2016) Moro, S., Rita, P., & Vala, B. (2016). Predicting social media performance metrics and evaluation of the impact on brand building: A data mining approach. Journal of Business Research, 69(9), 3341-3351.   
+
+[2] D. Dalpiaz, Applied Statistics with R, 2017-06-28. [Online] Available: http://daviddalpiaz.github.io/appliedstats/
+
+# Appendix A - Variable Descriptions and Mappings
+
+Table `A.1` shows the original variable names (as found in the dataset), the variable data type, and the original description of the variable. The descriptions for the variable names come from [1].
+
+```{r echo=FALSE}
+table_data <- data.frame(
+    original = c(
+        "Lifetime Post Consumers",
+        "Page total likes",
+        "Type",
+        "Category",
+        "Post Month",
+        "Post Weekday",
+        "Post Hour",
+        "Paid",
+        "Lifetime Post Total Reach",
+        "Lifetime Post Total Impressions",
+        "Lifetime Engaged Users",
+        "Lifetime Post Consumptions",
+        "Lifetime Post Impressions by people who have liked your Page",
+        "Lifetime Post reach by people who like your Page",
+        "Lifetime People who have liked your Page and engaged with your post",
+        "comment",
+        "like",
+        "share",
+        "Total Interactions"
+    ),
+    type = c(
+        "number",#Lifetime Post Consumers
+        "numeric",#Page total likes
+        "[Link, Photo, Status, Video]",#Type
+        "[action, product, inspiration]",#Category
+        "numeric",#Post Month
+        "numeric",#Post Weekday
+        "numeric",#Post Hour
+        "[yes, no]",#Paid
+        "number",#Lifetime Post Total Reach
+        "number",#Lifetime Post Total Impressions
+        "number",#Lifetime Engaged Users
+        "number",#Lifetime Post Consumptions
+        "number",#Lifetime Post Impressions by people who have liked your Page
+        "number",#Lifetime Post reach by people who like your Page
+        "number",#Lifetime People who have liked your Page and engaged with your post
+        "number",#comment
+        "number",#like
+        "number",#share
+        "number"#Total Interactions
+    ),
+    description = c(
+        "The number of people who clicked anywhere in a post",#Lifetime Post Consumers
+        "Number of people who have liked the company's page",#Page total likes
+        "Type of content (Link, Photo, Status, Video)",#Type
+        "Manual content characterization",#Category
+        "Month the post was published",#Post Month
+        "Weekday the post was published ",#Post Weekday
+        "Hour the post was published",#Post Hour
+        "If the company paid to Facebook for advertising",#Paid
+        "The number of people who saw a page post (unique users)",#Lifetime Post Total Reach
+        "Impressions are the number of times a post from a page is displayed, whether the post is clicked or not",#Lifetime Post Total Impressions
+        "The number of people who clicked anywhere in a post (unique users)",#Lifetime Engaged Users
+        "The number of clicks anywhere in a post",#Lifetime Post Consumptions
+        "Total number of impressions just from people who have liked a page",#Lifetime Post Impressions by people who have liked your Page
+        "Total number of impressions just from people who have liked a page",#Lifetime Post reach by people who like your Page
+        "The number of people who have liked a Page and clicked anywhere in a post (Unique users)",#Lifetime People who have liked your Page and engaged with your post
+        "Number of comments on the publication",#comment
+        "Number of \"Likes\" on the publication",#like
+        "Number of times the publication was shared.",#share
+        "The sum of \"likes,\"comments,\" and \"shares\" of the post"#Total Interactions
+    )
+)
+
+col_names <- c(
+    "Variable",
+    "Type",
+    "Description"
+)
+```
+####Table A.1
+```{r echo=FALSE}
+kable(table_data, row.names = FALSE, col.names = col_names, caption = "Table A.1 - Dataset Description")
+```
+

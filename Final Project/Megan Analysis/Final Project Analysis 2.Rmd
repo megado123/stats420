@@ -1,0 +1,440 @@
+---
+title: "Final Project Analysis"
+author: "Megan"
+date: "July 26, 2017"
+output: html_document
+---
+
+```{r}
+library(MASS)
+library(readr)
+library(lmtest)
+library(car)
+library(leaps)
+library(knitr)
+library(faraway)
+library(tibble)
+
+
+fb = read.table("dataset_Facebook.csv", sep = ";", header = T)
+
+
+
+fb$Type           = as.factor(fb$Type)
+fb$Category       = as.factor(fb$Category)
+fb$Post.Month     = as.factor(fb$Post.Month)
+fb$Post.Hour      = as.factor(fb$Post.Hour)
+fb$Post.Weekday   = as.factor(fb$Post.Weekday)
+fb$Paid           = as.factor(fb$Paid)
+
+
+
+
+
+
+full_model = lm(Lifetime.Post.Consumers ~ ., data = fb)
+
+colnames(fb)
+
+typeLevels = levels(fb$Type)
+
+summary(full_model)
+fb$Total.Interactions = NULL
+full_model = lm(Lifetime.Post.Consumers ~ ., data = fb)
+summary(full_model)
+nrow(fb)
+#Cleansing Data
+fb = fb[complete.cases(fb), ]
+
+#Initial Analysis:
+variables = colnames(fb)
+predictor_variables = variables[which(variables != "Lifetime.Post.Consumers")]
+response_variable = "Lifetime.Post.Consumers"
+
+
+
+getAdditiveModels = function(variables, response_variable, data_set, alpha)
+{
+  num_predictor_variables = length(variables)
+  p_val           = rep(0, num_predictor_variables ^ 2)
+  bp_p_value      = rep(0, num_predictor_variables ^ 2)
+  shapiro_p_value = rep(0, num_predictor_variables ^ 2)
+  strmodel        = rep(0, num_predictor_variables ^ 2)
+  rss             = rep(0, num_predictor_variables ^ 2)
+  beta_parameter  = rep(0, num_predictor_variables ^ 2)
+  pass_bp         = rep(0, num_predictor_variables ^ 2)
+  pass_shapiro    = rep(0, num_predictor_variables ^ 2)
+  adjustedR2      = rep(0, num_predictor_variables ^ 2)
+  sizeResiduals   = rep(0, num_predictor_variables ^ 2)
+  
+  index = 1;
+  
+  for (j in 1:num_predictor_variables)
+  {
+    smallestrss = 0
+    smallestrssIndex = 0 
+    for (i in 1:length(variables))
+    {
+      if(j == 1) #at the beginning
+      {
+        startpointer          = index
+        #could make s1 be log(y)
+        s1                    = response_variable
+        s2                    = variables[i]
+        strmodel[index]       = paste(s1, " ~ " , s2)
+        
+      }
+      else
+      {
+        s2                    = variables[i]
+        strmodel[index]       = paste(previousBestModel , " + " , s2)
+        
+      }
+      
+      model                    = lm(strmodel[index], data = data_set)
+      rss[index]               = sum(resid(model)^2) 
+      bp_p_value[index]        = bptest(model)$p.value
+      shapiro_p_value[index]   = shapiro.test(resid(model))$p.value
+      beta_parameter[index]    = j
+      adjustedR2[index]        = summary(model)$adj.r.squared
+      sizeResiduals[index]     = length(resid(model))
+      
+      if (sizeResiduals[i] == 0 )
+      {
+        print("ERROR!!!!!!!!!!!!!!!!!!!")
+        
+      }
+      else
+        print(paste(strmodel[index], ": " , sizeResiduals[i]))
+              
+      
+      if (shapiro_p_value[i] > alpha) {
+        pass_shapiro[index] = TRUE
+      }
+      
+      if (bp_p_value[i] > alpha) {
+        pass_bp[index] = TRUE
+      }
+      
+      if (smallestrssIndex == 0 || rss[index] < smallestrss){
+        
+        smallestrssIndex = index
+        smallestrss = rss[index]
+      }
+      index = index + 1
+      
+    }
+    #for a given number of predictor variables create temp vector and find the min rss
+    previousBestModel = strmodel[smallestrssIndex]
+  }
+  result         = data.frame(beta_parameter, strmodel, rss, adjustedR2, bp_p_value, shapiro_p_value, pass_bp, pass_shapiro, sizeResiduals)
+  result$strmodel =  as.character(result$strmodel)
+  result
+}
+
+
+results = getAdditiveModels(predictor_variables, response_variable, fb, .05)
+
+
+#here is a function that for a given number of beta parameters pulls out the lowest rss
+getModels = function(results, num_predictor_variables){
+  bestModelForParamNumber = rep("", num_predictor_variables)
+  for (i in 1:num_predictor_variables)
+  {
+    subset_data = results[results$beta_parameter == i, ]
+    
+    bestModelForParamNumber[i] = subset_data$strmodel[which.min(subset_data$rss)]
+    
+  }
+  bestModelForParamNumber
+}
+
+
+bestModels = getModels(results, length(predictor_variables))
+
+
+#now for each of the "best" linear models, do an anova test to determine which are actually the best
+doAnova = function(dataset, models, alpha)
+{
+  p_val   = rep(0, length(models) - 1)
+  keep_old = rep(FALSE, length(models) - 1)
+  winning_model = rep(0, length(models) - 1)
+  stop = FALSE
+  #print(length(models))
+  for (i in 1:(length(models) -1))
+  {
+    if (stop == FALSE)
+    {
+      p_val[i] = anova(lm(bestModels[i], data = dataset), lm(bestModels[i + 1], data = dataset))$"Pr(>F)"[2]
+      if (p_val[i] < alpha)
+      {
+        keep_old[i] = FALSE
+        winning_model[i] = bestModels[i + 1]
+        stop = FALSE
+      }
+      else
+      {
+        keep_old[i] = TRUE
+        winning_model[i] = bestModels[i]
+        stop = TRUE
+        report_winning  = winning_model[1:i]
+        report_p_val    = p_val[1:i]
+        report_keep_old = keep_old[1:i]
+      }
+    }
+  }
+  
+  output = data.frame(report_winning, report_p_val, report_keep_old)
+  output$report_winning =  as.character(output$report_winning)
+  output
+}
+
+
+results = doAnova(fb, bestModels, 0.05 )
+
+model_data_selected_RSS_Manual = results[results$report_keep_old == TRUE, ]
+
+model_selected_RSS_Manual = lm(model_data_selected_RSS_Manual$report_winning, data = fb)
+
+
+#best additive model based on RSS and Anova Test
+#Lifetime.Post.Consumers  ~  Lifetime.Engaged.Users  +  like  +  share  +  Lifetime.People.who.have.liked.your.Page.and.engaged.with.your.post  +  Post.Month  +  Lifetime.Post.Consumptions  +  comment  +  Lifetime.Post.Total.Reach
+
+###########################################################
+#AIC and BIC
+##########################################################
+predictor_variables = variables[which(variables != "Lifetime.Post.Consumers")]
+length(predictor_variables)
+
+createStringFullModel = function(predictor_variables){
+  num_predictor_variables = length(predictor_variables)
+  for (i in 1:num_predictor_variables)
+  {
+    if (i == 1)
+    {
+      model = paste("Lifetime.Post.Consumers", "~" ,predictor_variables[i] )
+      print(model)
+    }
+    else
+      model = paste(model , " + " , predictor_variables[i])
+  }
+  model
+}
+
+strFullModel = createStringFullModel(predictor_variables)
+
+
+##########################################################
+#AIC - less aggressive
+##########################################################
+#forward AIC
+fb_mod_start = lm(Lifetime.Post.Consumers ~ 1, data = fb)
+model_forward_aic = step(fb_mod_start,
+                         strFullModel,
+                         direction = "forward", trace = 0)
+
+summary(model_forward_aic)
+
+vif(model_forward_aic)
+
+fullMOdel = lm(strFullModel, data = fb)
+model_back_aic = step(fullMOdel, direction = "backward", trace = 0)
+summary(model_back_aic)
+vif(model_back_aic)
+
+
+
+##########################################################
+#BIC - more aggressive
+##########################################################
+full_model = lm(Lifetime.Post.Consumers ~ ., data = fb)
+n = length(resid(full_model))
+model_forward_bic = step(fb_mod_start,
+                         strFullModel,
+                         direction = "forward", k = log(n), trace = 0)
+summary(model_forward_bic)
+
+vif(model_forward_bic)
+
+#backward BIC
+model_back_bic = step(full_model, direction = "backward", k = log(n), trace = 0)
+summary(model_back_bic)
+
+###########################################################
+#Make a table saying which variables are in which model
+#to specify which variables to explore
+##########################################################
+
+
+
+                                                         
+all = predictor_variables %in% names(coef(model_selected_RSS_Manual)) %in%  names(coef(model_forward_aic)) %in% names(coef(model_back_aic)) %in% names(coef(model_forward_bic)) 
+
+Variables_RSS_Manual   = predictor_variables %in% names(coef(model_selected_RSS_Manual))
+Variables_Forward_AIC  = predictor_variables %in% names(coef(model_forward_aic))
+Variables_Backward_AIC = predictor_variables %in% names(coef(model_back_aic))
+Variables_Forward_BIC  = predictor_variables %in% names(coef(model_forward_bic))
+Variables_Backward_BIC = predictor_variables %in% names(coef(model_back_bic))
+
+#Variable, RSS Evelaution per beta parameter, Backward BIC, Forward BIC, Backward AIC, Forward AIC
+variables_for_analysis = data.frame(predictor_variables, Variables_RSS_Manual, Variables_Forward_BIC, Variables_Backward_BIC, Variables_Forward_AIC, Variables_Backward_AIC)
+
+colnames(variables_for_analysis) = c("Variables" , "Variable included in RSS Manual", "Variable included in Forward BIC", "Variable included in Backward BIC", "Variable included in Forward AIC", "Variable included in Backward AIC")
+knitr::kable(variables_for_analysis, caption = "MLR Additive Model Variable Analysis")
+```
+
+This table gives us a good idea of what variables we should use in our analysis.  We can now begin with looking at a pairs plot with the subset of variables that are included in all of the additive models to better understand the predictor variables themselves.
+
+
+```{r}
+fb_subset = subset(fb, select = c("Lifetime.Post.Consumers", "Lifetime.Post.Total.Reach", "Lifetime.Engaged.Users", "Lifetime.Post.Consumptions", "Lifetime.People.who.have.liked.your.Page.and.engaged.with.your.post", "comment", "like", "share"))
+
+```
+
+The pairs plot for this subset of variables is found below
+```{r fig.height=20, fig.width=10}
+pairs(fb_subset)
+```
+
+With the pairs plot, we can see it appears some relationships could be looked at, but quickly seeing the order of magnitude on the reponse variable, suggests we should also do a box-cox plot to determine if perhaps the response should be transformed.
+
+```{r}
+boxcox(model_selected_RSS_Manual, plotit = TRUE)
+
+par(mfrow = c(2,2))
+boxcox(model_forward_aic, plotit = TRUE)
+boxcox(model_back_aic, plotit = TRUE)
+boxcox(model_forward_bic, plotit = TRUE)
+boxcox(model_back_bic, plotit = TRUE)
+
+```
+
+The box-cox plot for all the models currently created suggests a transformation of the response variable
+
+```{r fig.height=20, fig.width=10}
+fb_subset = subset(fb, select = c("Lifetime.Post.Consumers", "Lifetime.Post.Total.Reach", "Lifetime.Engaged.Users", "Lifetime.Post.Consumptions", "Lifetime.People.who.have.liked.your.Page.and.engaged.with.your.post", "comment", "like", "share"))
+
+log.Consumers = log(fb_subset$Lifetime.Post.Consumers)
+
+fb_withResponseTransform = cbind( fb_subset, log.Consumers)
+pairs(fb_withResponseTransform, col = "dodgerblue")
+
+```
+
+The pairs plot shown above makes seeing a few trends much easier with the addition of the log.Consumers.  Several variables appear to either require a log transformation, or perhaps a power transforation.  Given we currently have 7 predictors of interest, a function was written to automate reviewing this information.
+
+Generically we will add + 1 to each predictor variable for log transformation to ensure the values are great than 0 if the min val
+
+```{r}
+min(fb_withResponseTransform$Lifetime.Post.Total.Reach)
+min(fb_withResponseTransform$Lifetime.Engaged.Users)
+min(fb_withResponseTransform$Lifetime.Post.Consumptions)
+min(fb_withResponseTransform$Lifetime.People.who.have.liked.your.Page.and.engaged.with.your.post)
+min(fb_withResponseTransform$comment)
+min(fb_withResponseTransform$like)
+min(fb_withResponseTransform$share)
+
+```
+
+
+```{r}
+
+transformationsPowers = function(predictor, response, dataset, responsevector, predictorvector){
+  
+  strQuad                      = paste("log(", response, ") ~ ", predictor , " + I(" , predictor, "^ 2) ")
+  
+  quad_model                   = lm(strQuad, data = dataset)
+  
+  quad_RMSE                    = sqrt(mean((responsevector - exp(fitted(quad_model))) ^ 2))
+  quad_bp_p_value              = bptest(quad_model)$p.value
+  quad_shapiro_p_value         = shapiro.test(resid(quad_model))$p.value
+  
+#  quad = c(quad_RMSE, quad_bp_p_value, quad_shapiro_p_value)
+  
+  strThird                     = paste("log(", response, ") ~ ", predictor , " + I(" , predictor, "^ 2)  + I(", predictor, "^3)")
+  third_model                  = lm(strThird, data = dataset)
+  
+  third_RMSE                   = sqrt(mean((responsevector - exp(fitted(third_model))) ^ 2))
+  third_bp_p_value             = bptest(third_model)$p.value
+  third_shapiro_p_value        = shapiro.test(resid(third_model))$p.value
+  
+#  third = c(third_RMSE, third_bp_p_value, third_shapiro_p_value)
+  
+#  result = data.frame(log = log, quad = quad, third = third)
+ 
+  predictor   = rep(predictor, 2)
+  transform   = c("^2 obeying hierachy", "^3 obeying hierachy")
+  bp          = c(quad_bp_p_value, third_bp_p_value)
+  shapiro     = c(quad_shapiro_p_value, third_shapiro_p_value)
+  RMSE        = c(quad_RMSE, third_RMSE)
+  
+  data.frame(predictor = predictor, transform = transform, bp = bp, shapiro = shapiro, RMSE = RMSE)
+  
+}
+
+variables = colnames(fb_withResponseTransform)
+predictor_variables = variables[which((variables != "Lifetime.Post.Consumers") & variables != "log.Consumers")]
+
+length(predictor_variables)
+
+result1 = transformationsPowers(predictor_variables[1], "Lifetime.Post.Consumers", fb_withResponseTransform, fb_withResponseTransform$Lifetime.Post.Consumers)
+knitr::kable(result1, caption = "Transformation Review")
+
+result1 = transformationsPowers(predictor_variables[2], "Lifetime.Post.Consumers", fb_withResponseTransform, fb_withResponseTransform$Lifetime.Post.Consumers)
+knitr::kable(result1, caption = "Transformation Review")
+
+result1 = transformationsPowers(predictor_variables[3], "Lifetime.Post.Consumers", fb_withResponseTransform, fb_withResponseTransform$Lifetime.Post.Consumers)
+knitr::kable(result1, caption = "Transformation Review")
+
+result1 = transformationsPowers(predictor_variables[4], "Lifetime.Post.Consumers", fb_withResponseTransform, fb_withResponseTransform$Lifetime.Post.Consumers)
+knitr::kable(result1, caption = "Transformation Review")
+
+result1 = transformationsPowers(predictor_variables[5], "Lifetime.Post.Consumers", fb_withResponseTransform, fb_withResponseTransform$Lifetime.Post.Consumers)
+knitr::kable(result1, caption = "Transformation Review")
+
+result1 = transformationsPowers(predictor_variables[6], "Lifetime.Post.Consumers", fb_withResponseTransform, fb_withResponseTransform$Lifetime.Post.Consumers)
+knitr::kable(result1, caption = "Transformation Review")
+
+result1 = transformationsPowers(predictor_variables[7], "Lifetime.Post.Consumers", fb_withResponseTransform, fb_withResponseTransform$Lifetime.Post.Consumers)
+knitr::kable(result1, caption = "Transformation Review")
+```
+Next we will examine log transformations
+
+```{r}
+transformationsLog = function (response, predictors, dataset, responsevector){
+  log_RMSE = rep(0:length(predictors))
+  log_bp_p_value  = rep(0:length(predictors))
+  log_shapiro_p_value  = rep(0:length(predictors))
+  
+for (i in 1: length(predictors)){
+
+  strLog = paste("log(", response, ") ~ log(", predictors[i] , ")")
+
+  log_model = lm(strLog, data = dataset)
+  
+  log_RMSE[i]                     = sqrt(mean((responsevector - exp(fitted(log_model))) ^ 2))
+  log_bp_p_value[i]               = bptest(log_model)$p.value
+  log_shapiro_p_value[i]          = shapiro.test(resid(log_model))$p.value
+}
+  
+  transform = rep("log of predictor", length(predictors))
+  data.frame(predictor = predictors, transform = transform, bp = log_bp_p_value, shapiro = log_shapiro_p_value, RMSE = log_RMSE )
+  
+}
+```
+
+In order to explore log transformations on predictor variables, in the case when the range is from 0 to some value, we will add 1 to the predictor variable.
+```{r}
+fb_withResponseTransformForLog = fb_withResponseTransform
+fb_withResponseTransformForLog$like = fb_withResponseTransformForLog$like + 1
+fb_withResponseTransformForLog$share = fb_withResponseTransformForLog$share + 1
+fb_withResponseTransformForLog$comment = fb_withResponseTransformForLog$comment + 1
+
+result1 = transformationsLog("Lifetime.Post.Consumers", predictor_variables, fb_withResponseTransformForLog, fb_withResponseTransformForLog$Lifetime.Post.Consumers )
+
+knitr::kable(result1, caption = "Transformation Review")
+```
+
+
+
+

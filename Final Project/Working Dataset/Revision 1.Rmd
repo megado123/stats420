@@ -1,0 +1,120 @@
+---
+title: "Final P roject"
+author: "Megan"
+date: "July 18, 2017"
+output: html_document
+---
+
+```{r}
+library(MASS)
+library(readr)
+library(lmtest)
+library(car)
+fb <- read_delim("~/University of Illinois/Status 420/Final Project/Proposal V2/dataset_Facebook.csv", 
+                               ";", escape_double = FALSE, trim_ws = TRUE)
+
+
+
+fb$Type = as.factor(fb$Type)
+fb$Category = as.factor(fb$Category)
+
+levels(fb$Type)
+levels(fb$Category)
+head(fb$Category)
+
+#Exact Collinearity
+#full_model = lm(log(`Lifetime Post Consumers`) ~ ., data = fb)
+#vif(full_model) #greater than 5 - 
+#Impacting Estimation, impacting inference, making variance go up.
+
+
+new_data = data.frame(
+  y   = fb$`Lifetime Post Consumers`,
+  x1  = fb$`Page total likes`,
+  x2  = 1 * as.numeric(fb$Type == "Link"),
+  x3  = 1 * as.numeric(fb$Type == "Photo"),
+  x4  = 1 * as.numeric(fb$Type == "Status"),
+  x5  = 1 * as.numeric(fb$Category == "1"),
+  x6  = 1 * as.numeric(fb$Category == "2"),
+  x7  = fb$`Post Month`,
+  x8 = fb$`Post Weekday`,
+  x9 = fb$`Post Hour`,
+  x10 = fb$Paid,
+  x11 = fb$`Lifetime Post Total Reach`,
+  x12 = fb$`Lifetime Post Total Impressions`,
+  x13 = fb$`Lifetime Engaged Users`,
+  x14 = fb$`Lifetime Post Consumptions`,
+  x15 = fb$`Lifetime Post Impressions by people who have liked your Page`,
+  x16 = fb$`Lifetime Post reach by people who like your Page`,
+  x17 = fb$`Lifetime People who have liked your Page and engaged with your post`,
+  x18 = fb$comment,
+  x19 = fb$like,
+  x20 = fb$share
+)
+
+full_model = lm(log(`Lifetime Post Consumers`) ~ ., data = fb)
+vif(full_model)
+
+
+
+variables = colnames(new_data)
+
+getSingle = function(variables, alpha = 0.01, data_set)
+{
+  num_predictors  = length(variables)
+  strmodel        = rep(0, num_predictors)
+  rss             = rep(0, num_predictors)
+  shapiro         = rep(0, num_predictors)
+  
+  for (i in 1:length(variables)) {
+    s1            = "y"
+    s2            = variables[i]
+    strmodel[i]   = paste(s1, " ~ " , s2)
+    print(strmodel[i])
+    model         = lm(strmodel[i], data = data_set)
+    rss[i]        = sum(resid(model)^2) 
+    shapiro[i]    = shapiro.test(resid(model))
+  }
+  
+  data.frame(strmodel = strmodel, rss = rss, shapiro = shapiro)
+  
+}
+
+predictor_variables = variables[which(variables != "y")]
+result = getSingle(predictor_variables, 0.01, new_data)
+knitr::kable(result, format = "markdown", padding = 3)
+
+#lowest RSS found at y~ 13
+result$strmodel[which.min(result$rss)]
+
+
+#doing it for the log
+getSingle = function(variables, alpha = 0.01, data_set)
+{
+  num_predictors  = length(variables)
+  strmodel        = rep(0, num_predictors)
+  rss             = rep(0, num_predictors)
+  shapiro         = rep(0, num_predictors)
+  
+  for (i in 1:length(variables)) {
+    s1            = "log(y)"
+    s2            = variables[i]
+    strmodel[i]   = paste(s1, " ~ " , s2)
+    print(strmodel[i])
+    model         = lm(strmodel[i], data = data_set)
+    rss[i]           = sum(resid(model)^2) 
+    shapiro[i]    = shapiro.test(resid(model))
+  }
+  data.frame(strmodel = strmodel, rss = rss, shapiro = shapiro)
+  
+}
+
+
+predictor_variables = variables[which(variables != "y")]
+result = getSingle(predictor_variables, 0.01, new_data)
+knitr::kable(result, format = "markdown", padding = 3)
+
+#lowest RSS found at y~ 13
+result$strmodel[which.min(result$rss)]
+```
+

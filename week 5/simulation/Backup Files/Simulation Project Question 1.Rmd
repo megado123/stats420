@@ -1,0 +1,11 @@
+---
+title: "Week 6 - Simulation Study"
+author: "STAT 420, Summer 2017, Megan Masanz, netid: mjneuman"
+date: ''
+output:
+  html_document: 
+    toc: yes
+  pdf_document: default
+---
+
+

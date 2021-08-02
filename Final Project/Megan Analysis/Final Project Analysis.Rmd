@@ -1,0 +1,673 @@
+---
+title: "Facebook Dataset Analysis Final Project"
+author: "Jianye Han, Zach Litz, Megan Masanz"
+date: "July 25, 2017"
+output:
+  html_document: 
+    toc: yes
+  pdf_document: default
+---
+
+### Introduction
+
+### Methods
+
+#### Variable Exploration
+
+#####1.  Variable Exploration Additive Model
+
+Below is loading the packages used during the analysis
+```{r}
+library(MASS)
+library(readr)
+library(lmtest)
+library(car)
+library(knitr)
+library(faraway)
+```
+
+```{r}
+fb = read.table("dataset_Facebook.csv", sep = ";", header = T)
+
+#prepare categorical variables for use of dummy variables
+fb$Type           = as.factor(fb$Type)
+fb$Category       = as.factor(fb$Category)
+fb$Post.Month     = as.factor(fb$Post.Month)
+fb$Post.Hour      = as.factor(fb$Post.Hour)
+fb$Post.Weekday   = as.factor(fb$Post.Weekday)
+fb$Paid           = as.factor(fb$Paid)
+
+```
+
+Initial full additive model.
+```{r}
+full_model = lm(Lifetime.Post.Consumers ~ ., data = fb)
+summary(full_model)
+
+#Perfect correlation so removed
+fb$Total.Interactions = NULL
+full_model = lm(Lifetime.Post.Consumers ~ ., data = fb)
+summary(full_model)
+
+levels(fb$Post.Weekday)
+levels(fb$Post.Hour)
+
+nrow(fb)
+#Cleansing Data
+fb = fb[complete.cases(fb), ]
+nrow(fb)
+
+length(coef(full_model))
+
+
+
+```
+
+
+For initial analysis given the large number of variables, we will use a dataframe with generic names, being with an additive model analysis, add interactions, and determine the subset of variables we are interested in exploring, and at that point we will move back to using the actual predictor names using a subset of the fb dataset
+
+```{r}
+new_data = data.frame(
+  y   = fb$Lifetime.Post.Consumers,
+  x1  = fb$Page.total.likes,
+  x2  = fb$Lifetime.Post.Total.Reach,
+  x3  = fb$Lifetime.Post.Total.Impressions,
+  x4  = fb$Lifetime.Engaged.Users,
+  x5  = fb$Lifetime.Post.Consumptions,
+  x6  = fb$Lifetime.Post.Impressions.by.people.who.have.liked.your.Page,
+  x7  = fb$Lifetime.Post.reach.by.people.who.like.your.Page, 
+  x8  = fb$Lifetime.People.who.have.liked.your.Page.and.engaged.with.your.post,
+  x9  = fb$comment,
+  x10 = fb$like,
+  x11 = fb$share,
+  x12 = 1 * as.numeric(fb$Type == "Photo"),
+  x13 = 1 * as.numeric(fb$Type == "Status"),
+  x14 = 1 * as.numeric(fb$Type == "Video"),
+  x15 = 1 * as.numeric(fb$Category == "2"),
+  x16 = 1 * as.numeric(fb$Category == "3"),
+  x17 = 1 * as.numeric(fb$Post.Month == "2"),
+  x18 = 1 * as.numeric(fb$Post.Month == "3"),
+  x19 = 1 * as.numeric(fb$Post.Month == "4"),
+  x20 = 1 * as.numeric(fb$Post.Month == "5"),
+  x21 = 1 * as.numeric(fb$Post.Month == "6"),
+  x22 = 1 * as.numeric(fb$Post.Month == "7"),
+  x23 = 1 * as.numeric(fb$Post.Month == "8"),
+  x24 = 1 * as.numeric(fb$Post.Month == "9"),
+  x25 = 1 * as.numeric(fb$Post.Month == "10"),
+  x26 = 1 * as.numeric(fb$Post.Month == "11"),
+  x27 = 1 * as.numeric(fb$Post.Month == "12"),
+  x28 = 1 * as.numeric(fb$Post.Weekday == "2"),
+  x29 = 1 * as.numeric(fb$Post.Weekday == "3"),
+  x30 = 1 * as.numeric(fb$Post.Weekday == "4"),
+  x31 = 1 * as.numeric(fb$Post.Weekday == "5"),
+  x32 = 1 * as.numeric(fb$Post.Weekday == "6"),
+  x33 = 1 * as.numeric(fb$Post.Weekday == "7"),
+  x34 = 1 * as.numeric(fb$Post.Hour == "2"),
+  x35 = 1 * as.numeric(fb$Post.Hour == "3"),
+  x36 = 1 * as.numeric(fb$Post.Hour == "4"),
+  x37 = 1 * as.numeric(fb$Post.Hour == "5"),
+  x38 = 1 * as.numeric(fb$Post.Hour == "6"),
+  x39 = 1 * as.numeric(fb$Post.Hour == "7"),
+  x40 = 1 * as.numeric(fb$Post.Hour == "8"),
+  x41 = 1 * as.numeric(fb$Post.Hour == "9"),
+  x42 = 1 * as.numeric(fb$Post.Hour == "10"),
+  x43 = 1 * as.numeric(fb$Post.Hour == "11"),
+  x44 = 1 * as.numeric(fb$Post.Hour == "12"),
+  x45 = 1 * as.numeric(fb$Post.Hour == "13"),
+  x46 = 1 * as.numeric(fb$Post.Hour == "14"),
+  x47 = 1 * as.numeric(fb$Post.Hour == "15"),
+  x48 = 1 * as.numeric(fb$Post.Hour == "16"),
+  x49 = 1 * as.numeric(fb$Post.Hour == "17"),
+  x50 = 1 * as.numeric(fb$Post.Hour == "18"),
+  x51 = 1 * as.numeric(fb$Post.Hour == "19"),
+  x52 = 1 * as.numeric(fb$Post.Hour == "20"),
+  x53 = 1 * as.numeric(fb$Post.Hour == "22"),
+  x54 = 1 * as.numeric(fb$Post.Hour == "23"),
+  x55 = 1 * as.numeric(fb$Paid == 1)
+)
+
+
+variables = colnames(new_data)
+predictor_variables = variables[which(variables != "y")]
+
+#function to get the lowest RSS per parameter size, then per parameter size, 
+#the one with the lowest RSS is used for the next size of parameters
+
+getAdditiveModels = function(variables, data_set, alpha)
+{
+  num_predictor_variables = length(variables)
+  p_val           = rep(0, num_predictor_variables ^ 2)
+  bp_p_value      = rep(0, num_predictor_variables ^ 2)
+  shapiro_p_value = rep(0, num_predictor_variables ^ 2)
+  strmodel        = rep(0, num_predictor_variables ^ 2)
+  rss             = rep(0, num_predictor_variables ^ 2)
+  beta_parameter  = rep(0, num_predictor_variables ^ 2)
+  pass_bp         = rep(0, num_predictor_variables ^ 2)
+  pass_shapiro    = rep(0, num_predictor_variables ^ 2)
+  adjustedR2      = rep(0, num_predictor_variables ^ 2)
+  
+  index = 1;
+  
+  for (j in 1:num_predictor_variables)
+  {
+    smallestrss = 0
+    smallestrssIndex = 0 
+    for (i in 1:length(variables))
+    {
+      if(j == 1) #at the beginning
+      {
+        startpointer          = index
+        #could make s1 be log(y)
+        s1                    = "y"
+        s2                    = variables[i]
+        strmodel[index]       = paste(s1, " ~ " , s2)
+        
+      }
+      else
+      {
+        s2                    = variables[i]
+        strmodel[index]       = paste(previousBestModel , " + " , s2)
+        
+      }
+
+      model                    = lm(strmodel[index], data = data_set)
+      rss[index]               = sum(resid(model)^2) 
+      bp_p_value[index]        = bptest(model)$p.value
+      shapiro_p_value[index]   = shapiro.test(resid(model))$p.value
+      beta_parameter[index]    = j
+      adjustedR2[index]        = summary(model)$adj.r.squared
+      
+      if (shapiro_p_value[i] > alpha) {
+        pass_shapiro[index] = TRUE
+      }
+      
+      if (bp_p_value[i] > alpha) {
+        pass_bp[index] = TRUE
+      }
+      
+      if (smallestrssIndex == 0 || rss[index] < smallestrss){
+        
+        smallestrssIndex = index
+        smallestrss = rss[index]
+      }
+      index = index + 1
+      
+    }
+    #for a given number of predictor variables create temp vector and find the min rss
+    previousBestModel = strmodel[smallestrssIndex]
+  }
+  result         = data.frame(beta_parameter, strmodel, rss, adjustedR2, bp_p_value, shapiro_p_value, pass_bp, pass_shapiro)
+  result$strmodel =  as.character(result$strmodel)
+  result
+}
+
+
+results = getAdditiveModels(predictor_variables, new_data, .05)
+
+#function to get the best model per parameter size
+getModels = function(results, num_predictor_variables){
+  bestModelForParamNumber = rep("", num_predictor_variables)
+  for (i in 1:num_predictor_variables)
+  {
+    subset_data = results[results$beta_parameter == i, ]
+    bestModelForParamNumber[i] = subset_data$strmodel[which.min(subset_data$rss)]
+  }
+  bestModelForParamNumber
+}
+
+bestModels = getModels(results, 55)
+
+#function to do the anova test between the lowest RSS per parameter size
+doAnova = function(dataset, models, alpha)
+{
+  p_val   = rep(0, length(models) - 1)
+  keep_old = rep(FALSE, length(models) - 1)
+  winning_model = rep(0, length(models) - 1)
+  stop = FALSE
+  for (i in 1:(length(models) -1))
+  {
+    if (stop == FALSE)
+    {
+      p_val[i] = anova(lm(bestModels[i], data = new_data), lm(bestModels[i + 1], data = new_data))$"Pr(>F)"[2]
+      if (p_val[i] < alpha)
+      {
+        keep_old[i] = FALSE
+        winning_model[i] = bestModels[i + 1]
+        stop = FALSE
+      }
+      else
+      {
+        keep_old[i] = TRUE
+        winning_model[i] = bestModels[i]
+        stop = TRUE
+        report_winning  = winning_model[1:i]
+        report_p_val    = p_val[1:i]
+        report_keep_old = keep_old[1:i]
+      }
+    }
+  }
+  
+  data.frame(report_winning, report_p_val, report_keep_old)
+}
+
+results = doAnova(new_data, bestModels, 0.05 )
+
+
+results[results$report_keep_old == TRUE, ]
+
+model_add = lm(y ~ x4 + x10 + x11 + x8 + x5 + x27 + x9 + x26 + x2 + x14 + x3 + x17, data = new_data)
+
+vif(model_add)
+
+```
+
+```{r}
+#forward
+fb_mod_start = lm(y ~ 1, data = new_data)
+model_forward_aic = step(fb_mod_start,
+                              y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + x8 + x9 + x10 + x11 + x12 + x13 + x14 + x15 + x16 + x17 + x18 + x19 + x20 + x21 + x22 + x23 + x24 + x25 + x26 + x27 + x28 + x29 + x30 + x31 + x32 + x33 + x34 + x35 + x36 + x37 + x38 + x39 + x40 + x41 + x42 + x43 + x44 + x45 + x46 + x47 + x48 + x49 + x50 + x51 + x52 + x53 + x54 + x55,
+                              direction = "forward", trace = 0)
+
+summary(model_forward_aic)
+
+vif(model_forward_aic)
+
+full_model = lm(y ~ ., data = new_data)
+n = length(resid(full_model))
+model_forward_bic = step(fb_mod_start,
+                       y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + x8 + x9 + x10 + x11 + x12 + x13 + x14 + x15 + x16 + x17 + x18 + x19 + x20 + x21 + x22 + x23 + x24 + x25 + x26 + x27 + x28 + x29 + x30 + x31 + x32 + x33 + x34 + x35 + x36 + x37 + x38 + x39 + x40 + x41 + x42 + x43 + x44 + x45 + x46 + x47 + x48 + x49 + x50 + x51 + x52 + x53 + x54 + x55,
+                              direction = "forward", k = log(n), trace = 0)
+summary(model_forward_bic)
+
+vif(model_forward_bic)
+
+```
+
+
+```{r}
+#Backwards
+full_model = lm(y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + x8 + x9 + x10 + x11 + x12 + x13 + x14 + x15 + x16 + x17 + x18 + x19 + x20 + x21 + x22 + x23 + x24 + x25 + x26 + x27 + x28 + x29 + x30 + x31 + x32 + x33 + x34 + x35 + x36 + x37 + x38 + x39 + x40 + x41 + x42 + x43 + x44 + x45 + x46 + x47 + x48 + x49 + x50 + x51 + x52 + x53 + x54 + x55, data = new_data)
+
+#AIC seems to agree
+model_back_aic = step(full_model, direction = "backward", trace = 0)
+
+summary(model_back_aic)
+
+vif(model_back_aic)
+#we have pretty low VIF, however 5 is considered high
+#Now need to look at colllinearity
+
+
+#BIC check
+n = length(resid(model_add))
+model_back_bic = step(model_add, direction = "backward", k = log(n), trace = 0)
+
+summary(model_back_bic)
+
+vif(model_back_bic)
+
+model_add_selected = model_back_bic
+
+```
+
+
+Given the p-value for the variable we are currently referring to as `x17` and it's removal in the BIC model we will continue further analysis excluding `x17`
+
+Note that **AIC** did not remove the additional parameters that we had removed.  This is due to our selection of an $\alpha$ = 0.05 that the code written removed the lower parameters as would be expected with the **BIC** which has a larger penalty for larger models.  Given we are attempting to provide a model for explanation, we will continue with examining the variables that are in our current additive model.
+
+
+```{r}
+vif(model_add)
+vif(model_back_aic)
+vif(model_back_bic)
+vif(model_forward_aic)
+vif(model_forward_bic)
+
+```
+
+partial correlation coefficient - need to explore these more - create a function? but this should be using the actual variables names
+```{r}
+model_small = lm(y ~ x4 + x10, data = new_data)
+car::vif(model_small)
+
+x11_model_small = lm(x11 ~ x4 + x10, data = new_data)
+cor(resid(model_small), resid(x11_model_small))
+```
+
+variables added plot - need to explore these more - create a function?  but this should be using the actual variables names
+```{r}
+#variable added plot
+plot(resid(model_small) ~ resid(x11_model_small), col = "dodgerblue", pch = 20,
+     xlab = "Residuals, Added Predictor", ylab = "Residuals, Original Model")
+abline(h = 0, lty = 2)
+abline(v = 0, lty = 2)
+abline(lm(resid(model_small) ~ resid(x11_model_small)),
+       col = "darkorange", lwd = 2)
+```
+
+#### Interactions Analysis
+
+```{r}
+###############################################################################
+#next will examine interaction terms
+#x4, x10, x11, x8, x5, x27, x9, x26, x2, x14, x3
+################################################################################
+fb_limited = data.frame(
+  y   = new_data$y,
+  x4  = new_data$x4,
+  x10 = new_data$x10,
+  x11 = new_data$x11,
+  x8 = new_data$x8,
+  x5 = new_data$x5,
+  x27 = new_data$x27,
+  x9 = new_data$x9,
+  x26 = new_data$x26,
+  x2 = new_data$x2,
+  x14 = new_data$x14,
+  x3 = new_data$x3)
+
+pairs(fb_limited)  
+
+model_interact = lm(y ~ (x4 + x10 + x11 + x8 + x5 + x27 + x9 + x26 + x2 + x14 + x3) ^ 2, data = fb_limited)
+summary(model_interact)
+
+anova(model_add_selected, model_interact)
+#above shows some interaction is good. - the overal p value is showing that some interaction is significant
+
+
+#look at AIC and BIC and adjusted R^2 to help determine which interactions we should explore
+#AIC seems to agree
+model_back_aic = step(model_interact, direction = "backward", trace = 0)
+summary(model_back_aic)
+car::vif(model_back_aic)
+
+
+#BIC check
+n = length(resid(model_interact))
+model_back_bic = step(model_interact, direction = "backward", k = log(n), trace = 0)
+summary(model_back_bic)
+
+#comparing VIF found in origianl model and BIC backward
+car::vif(model_add_selected)
+car::vif(model_back_aic)
+car::vif(model_back_bic)
+
+#since that did reduced the VIF of x4, we will proceed with removing x17
+
+#Given the high VIF that was introducted, we can see that x27 interactions do not appear to introduce
+#high VIF 
+model_interact = lm(y ~ (x4 + x10 + x11 + x8 + x5 + x27 + x9 + x26 + x2 + x14 + x3)* x27, data = fb_limited)
+
+summary(model_interact)
+
+#some of the interactiosn are significant
+anova(model_add_selected, model_interact)
+
+
+
+n = length(resid(model_interact))
+model_back_bic = step(model_interact, direction = "backward", k = log(n), trace = 0)
+summary(model_back_bic)
+
+#did not significantly raise
+car::vif(model_back_bic)
+car::vif(model_add_selected)
+
+anova(model_add_selected, model_back_bic)
+
+#update the model to include the additional interactions
+model_int_selected = model_back_bic
+
+summary(model_int_selected)
+#interactions end - looks like model with interactions is the "best current" model which will need to be validated
+
+```
+
+```{r}
+##function
+diagnostics = function(model, pcol= 1, lcol = 0, alpha = 0.05, plotit = TRUE, testit = TRUE){
+  if (plotit == TRUE){
+    par(mfrow = c(1, 2))
+    plot(fitted(model), resid(model), col = pcol, pch = 20,
+         xlab = "Fitted", ylab = "Residuals", main = "Fitted vs Residuals")
+    abline(h = 0, col = lcol, lwd = 2)
+    qqnorm(resid(model), main = "Normal Q-Q Plot", col = pcol)
+    qqline(resid(model), col = lcol, lwd = 2)
+  }
+  if (testit == TRUE){
+    shapiro_p_value = shapiro.test(resid(model))$p.value
+    bp_p_value      = bptest(model)$p.value 
+    bp_decision      = ifelse(bp_p_value < alpha, "Reject Equal Variance - Bad", "Fail to Equal Variance-Good")
+    shapiro_decision = ifelse(shapiro_p_value < alpha, "Reject Normality - Bad", "Fail to Reject Normality- Good")
+    
+    return_val = list(shapiro_p_value = shapiro_p_value, bp_p_value = bp_p_value, bp_decision = bp_decision, shapiro_decision = shapiro_decision)
+    return_val
+  }
+}
+```
+
+
+```{r}
+##################################################################################################################
+#Exploring Transformations
+##################################################################################################################
+
+#currently we have a model with no interactions, and a model with interactions
+#now we would like to look at transformations
+
+#response needs to be transformed for sure.
+boxcox(model_add_selected, plotit = TRUE)
+boxcox(model_int_selected, plotit = TRUE)
+
+#chosen_model_additive
+#current_chosen_model_int
+y_new = log(fb_limited$y)
+
+fb_withResponseTransform = cbind( fb_limited, y_new)
+#View(fb_withResponseTransform)
+pairs(fb_withResponseTransform)
+
+
+summary(model_int_selected)
+summary(model_add_selected)
+
+#current_add_model = x4 + x10 + x11 + x8 + x5 + x27 + x9 + x26 + x2 + x14 + x3
+#current_chosen_model_int = x4 + x10 + x11 + x8 + x5 + x27 + x9 + x26 + x2 + x14 + x10:x27 + x5:x27
+
+
+#Based on pairs plot, x4 is either logrithmic or to a higher power
+
+#Examine x4 transformations
+#backward
+
+
+#AIC seems to agree
+model_log_response = lm(log(y) ~ x4 + x10 + x11 + x8 + x5 + x27 + x9 + x26 + x2 + x14 + x3, data = fb_limited)
+
+model_tranformed = lm(log(y) ~ x4 + x10 + x11 + x8 + x5 + x27 + x9 + x26 + x2 + x14 + x3 + log(x4) + I(x4^2), data = fb_limited)
+
+model_back_aic = step(model_tranformed, direction = "backward", trace = 0)
+summary(model_back_aic)
+car::vif(model_back_aic)
+#VIF for x4 ^ 2 is high, will keep the log(x4)
+model_tranformed = lm(log(y) ~ x4 + x10 + x11 + x8 + x5 + x27 + x9 + x26 + x2 + x14 + x3 + log(x4), data = fb_limited)
+car::vif(model_tranformed)
+anova(model_log_response, model_tranformed)
+#keep the model transformed
+
+x4_trans = diagnostics(model_tranformed, testit = TRUE, pcol = "darkorange", lcol = "dodgerblue", plotit = TRUE)
+x4_trans$shapiro_p_value
+x4_trans$bp_p_value
+
+#look at taking out extreme points
+infl_value = 4/length(cooks.distance(model_tranformed))
+
+indexes_to_remove = unname(which(cooks.distance(model_tranformed) > infl_value))
+length(indexes_to_remove)
+
+remove_influence =  fb_limited[ -indexes_to_remove, ]
+model_removed_influence  = lm(log(y) ~ x4 + x10 + x11 + x8 + x5 + x27 + x9 + x26 + x2 + x14 + x3 + log(x4), data = remove_influence)
+x4_trans = diagnostics(model_tranformed, testit = TRUE, pcol = "darkorange", lcol = "dodgerblue", plotit = TRUE)
+x4_trans$shapiro_p_value
+x4_trans$bp_p_value
+
+#even removing points of influence from the model did not allow it to pass the bp or shapiro tests
+
+#####################################
+#X10
+####################################
+#Examine x10 transformations
+
+fb_subset = (fb_limited[log(fb_limited$x10) != "-Inf", ])
+
+model_log_response = lm(log(y) ~ x4 + x10 + x11 + x8 + x5 + x27 + x9 + x26 + x2 + x14 + x3, data = fb_subset)
+model_back_aic = step(model_log_response, direction = "backward", trace = 0)
+
+summary(model_back_aic)
+vif(model_back_aic)
+result = diagnostics(model_back_aic, testit = TRUE, pcol = "darkorange", lcol = "dodgerblue", plotit = TRUE)
+result$shapiro_p_value
+result$bp_p_value
+
+
+model_tranformed    = lm(log(y) ~ x4 + x10 + x11 + x8 + x5 + x27 + x9 + x26 + x2 + x14 + x3 + log(x10) + I(x10^2), data = fb_subset)
+vif(model_tranformed)
+model_back_aic = step(model_tranformed, direction = "backward", trace = 0)
+#keep the log of 10
+x10_trans = diagnostics(model_back_aic, testit = TRUE, pcol = "darkorange", lcol = "dodgerblue", plotit = TRUE)
+result$shapiro_p_value
+result$bp_p_value
+
+
+#something good is here
+anova(model_log_response, model_tranformed)
+
+
+###checking for good stuff
+
+model_back_aic = step(model_tranformed, direction = "backward", trace = 0)
+summary(model_back_aic)
+#suggests keeping the log(x10)
+car::vif(model_back_aic)
+anova(model_log_response, model_back_aic)$"Pr(>F)"
+
+
+#improved the VIF
+x10_trans = diagnostics(model_tranformed, testit = TRUE, pcol = "darkorange", lcol = "dodgerblue", plotit = TRUE)
+x10_trans$shapiro_p_value
+x10_trans$bp_p_value
+
+#need to "transform the data" so we can take the log of the predictor since it includes 0
+fb_transform = fb_limited
+fb_transform$x10  = fb_transform$x10 + 1
+#do note that x10 by itself does not violate the model assumptions
+log_log_model_add = lm(log(y) ~ x10 + log(x10), data = fb_transform)
+log_log_model_add_results = diagnostics(log_log_model_add, testit = TRUE, pcol = "darkorange", lcol = "dodgerblue")
+log_log_model_add_results$shapiro_p_value #normality is still suspect
+log_log_model_add_results$bp_p_value      #not as good bp value as seen when just x4 was in the model, suggesting log(x4) could replace x4
+
+log_log_model_add = lm(log(y) ~ x10 + log(x10) + log(x4) + x4, data = fb_subset)
+log_log_model_add_results = diagnostics(log_log_model_add, testit = TRUE, pcol = "darkorange", lcol = "dodgerblue")
+log_log_model_add_results$shapiro_p_value #normality is still suspect
+log_log_model_add_results$bp_p_value      #not as good bp value as seen when just x4 was in the model, suggesting log(x4) could replace x4
+
+#what about if I removed influencatioal points
+indexes_to_remove = unname(which(cooks.distance(log_log_model_add) > infl_value))
+remove_influence =  fb_subset[ -indexes_to_remove, ]
+
+log_log_model_add = lm(log(y) ~ x10 + log(x10) + log(x4) + x4, data = remove_influence)
+log_log_model_add_results = diagnostics(log_log_model_add, testit = TRUE, pcol = "darkorange", lcol = "dodgerblue")
+log_log_model_add_results$shapiro_p_value #normality is still suspect
+log_log_model_add_results$bp_p_value      #not as good bp value as seen when just x4 was in the model, suggesting log(x4) could replace x4
+
+#so we now say that x4 is removed from the model even though it has the lowest RSS for parameter size 1
+
+###################################################
+#x11 on the pairs plot looks prettty simliar to x10
+####################################################
+fb_subset = (fb_limited[log(fb_limited$x10) != "-Inf", ])
+fb_subset = (fb_subset[log(fb_subset$x11) != "-Inf", ])
+nrow(fb_subset)
+#482 rows
+
+log_log_model_current = lm(log(y) ~ x10 + log(x10), data = fb_subset)
+
+log_log_x11 =  lm(log(y) ~ x10 + log(x10) + log(x11) + x11, data = fb_subset)
+
+
+x11_trans = diagnostics(log_log_x11, testit = TRUE, pcol = "darkorange", lcol = "dodgerblue", plotit = TRUE)
+x11_trans$shapiro_p_value
+x11_trans$bp_p_value
+vif(log_log_x11)
+
+#get rid of x11?
+log_log_x11_new =  lm(log(y) ~ x10 + log(x10) + log(x11), data = fb_subset)
+vif(log_log_x11_new) #looks really good
+
+anova(log_log_x11, log_log_x11_new)
+#prefer the old model
+currently_preferred =  lm(log(y) ~ x10 + log(x10) + log(x11), data = fb_subset)
+
+summary(currently_preferred)$adj.r.squared
+summary(model_add_selected)$adj.r.squared
+summary(model_int_selected)$adj.r.squared
+
+
+calc_loocv_rmse = function(model) {
+  sqrt(mean((resid(model) / (1 - hatvalues(model))) ^ 2))
+}
+
+
+calc_loocv_rmse_with_log_response = function(data, model) {
+  sqrt((mean(data$y) - exp(fitted(model)))^2)
+}
+
+
+
+calc_loocv_rmse(currently_preferred)
+calc_loocv_rmse(model_add_selected)
+calc_loocv_rmse(model_int_selected)
+
+
+############################
+#x8 analysis
+############################
+model = lm(log(y) ~ x10 + log(x10) + log(x11) + log(x8) + I(x8 ^ 2) + x8, data = fb_subset)
+model_back_aic = step(model, direction = "backward", trace = 0)
+summary(model_back_aic)
+vif(model_back_aic)
+
+model = lm(log(y) ~ x10 + log(x10) + log(x11) + log(x8) + I(x8 ^ 2), data = fb_subset)
+model_back_aic = step(model, direction = "backward", trace = 0)
+summary(model_back_aic)
+vif(model_back_aic)
+
+model = lm(log(y) ~ x10 + log(x10) + log(x11)  + I(x8 ^ 2), data = fb_subset)
+model_back_aic = step(model, direction = "backward", trace = 0)
+summary(model_back_aic)
+vif(model_back_aic)
+
+#like the low vif, now check against assumptions of the model, this doesn't work
+x8_trans = diagnostics(model_back_aic, testit = TRUE, pcol = "darkorange", lcol = "dodgerblue", plotit = TRUE)
+x8_trans$bp_p_value
+x8_trans$shapiro_p_value
+
+#####checking with the log
+model = lm(log(y) ~ x10 + log(x10) + log(x11)  + log(x8), data = fb_subset)
+model_back_aic = step(model, direction = "backward", trace = 0)
+summary(model_back_aic)
+vif(model_back_aic)
+
+#like the low vif, now check against assumptions of the model, this doesn't work
+x8_trans = diagnostics(model_back_aic, testit = TRUE, pcol = "darkorange", lcol = "dodgerblue", plotit = TRUE)
+x8_trans$bp_p_value
+x8_trans$shapiro_p_value
+#x8 appears to make us 
+
+```
+
+### Results
+
+### Discussion
+
+### Appendix

@@ -1,0 +1,368 @@
+---
+title: "Week 6 - Simulation Study"
+author: "STAT 420, Summer 2017, Megan Masanz, netid: mjneuman"
+date: ''
+output:
+  html_document: 
+    toc: yes
+  pdf_document: default
+---
+
+
+## Simulation Study 2
+
+###Introduction
+The intent of this simulation study is to explore how well the TEST RMSE will select the correct model.  During this simulation study a dataset will be randomly split into 2 sets of equal sizes (300 observations for training, 300 observations for testing).  between a train dataset and a test dataset evenly over 500 simulations.  The dataset used for this simulation comes from data stored in [`study_2.csv](study_2.csv) which contains values of the 9 predictors with a sample size of 600.  
+
+Duruing each of the 500 simulations, a total of 9 models will be fit, and the Train and Test RMSE will be calculated for 3 different values of $\sigma$.
+
+$$\text{RMSE}(\text{model, data}) = \sqrt{\frac{1}{n} \sum_{i = 1}^{n}(y_i - \hat{y}_i)^2}$$
+
+###Methods
+
+```{r}
+#set seed
+birthday = 19810803
+set.seed(birthday)
+
+#set known model parameters
+beta_0 = 0
+beta_1 = 6
+beta_2 = -3.5
+beta_3 = 1.7
+beta_4 = -1.1
+beta_5 = 0.7
+#set values of sigma for each simulation
+sigma_1 = 1
+sigma_2 = 2
+sigma_3 = 4
+
+num_sims = 500
+sample_size_split = 300
+sample_size_total = 600
+
+library(readr)
+study_2 = read_csv("study_2.csv")
+
+
+x0 = rep(1, sample_size_total)
+x1 = study_2$x1
+x2 = study_2$x2
+x3 = study_2$x3
+x4 = study_2$x4
+x5 = study_2$x5
+x6 = study_2$x6
+x7 = study_2$x7
+x8 = study_2$x8
+x9 = study_2$x9
+y = rep(0, sample_size_total)
+
+
+sim_data = data.frame(x1, x2, x3, x4, x5,x6, x7, x8, x9,  y)
+
+get_predict = function(model, test_data){
+  test_data$y - predict(model, newdata = test_data)
+}
+
+get_RMSE= function(data) {
+  RMSE   = sqrt( mean(data ^ 2  ))
+}
+
+simulate2 = function(num_sims, sigma){
+  RMSE_train   = matrix(0, nrow = num_sims, ncol = 9)
+  RMSE_test    =  matrix(0, nrow = num_sims, ncol = 9)
+  winner_test  = rep(0, num_sims)
+  winner_train = rep(0, num_sims)
+  
+  for(i in 1:num_sims) {
+      
+    eps = rnorm(sample_size_total, mean = 0 , sd = sigma)
+    
+    sim_data$y = beta_0 * x0 + beta_1 * x1 + beta_2 * x2 + beta_3 * x3 + beta_4 * x4 + beta_5 * x5 +   eps
+    
+    train_index = sample(1:nrow(sim_data), sample_size_split)
+    train = sim_data[train_index ,]
+    test  = sim_data[-train_index ,]
+    
+    model_1 = lm( y ~ x1, data = train)
+    model_2 = lm( y ~ x1 + x2, data = train)
+    model_3 = lm( y ~ x1 + x2 + x3, data = train)
+    model_4 = lm( y ~ x1 + x2 + x3 + x4, data = train)
+    model_5 = lm( y ~ x1 + x2 + x3 + x4 + x5, data = train)
+    model_6 = lm( y ~ x1 + x2 + x3 + x4 + x5 + x6, data = train)
+    model_7 = lm( y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7, data = train)
+    model_8 = lm( y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + x8, data = train)
+    model_9 = lm( y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + x8 + x9, data = train)
+    
+    RMSE_train[i ,] = c(get_RMSE(resid(model_1)), get_RMSE(resid(model_2)), get_RMSE(resid(model_3)), get_RMSE(resid(model_4)),
+                      get_RMSE(resid(model_5)), get_RMSE(resid(model_6)), get_RMSE(resid(model_7)), get_RMSE(resid(model_8)),
+                      get_RMSE(resid(model_9))
+                      )
+
+    RMSE_test[i, ] = c(get_RMSE(get_predict(model_1, test)), get_RMSE(get_predict(model_2, test)), 
+                       get_RMSE(get_predict(model_3, test)), get_RMSE(get_predict(model_4, test)), 
+                       get_RMSE(get_predict(model_5, test)), get_RMSE(get_predict(model_6, test)), 
+                       get_RMSE(get_predict(model_7, test)), get_RMSE(get_predict(model_8, test)), 
+                       get_RMSE(get_predict(model_9, test))
+                       )
+    winner_test[i] = which.min(RMSE_test[i, ])
+    winner_train[i] = which.min(RMSE_train[i, ])
+    
+  }
+  result = data.frame(RMSE_train, RMSE_test, winner_test, winner_train) 
+  colnames(result) <- c( "TrainRMSE_M1", "TrainRMSE_M2", "TrainRMSE_M3", "TrainRMSE_M4", "TrainRMSE_M5", "TrainRMSE_M6", 
+                         "TrainRMSE_M7", "TrainRMSE_M8", "TrainRMSE_M9", 
+                        "TestRMSE_M1", "TestRMSE_M2", "TestRMSE_M3", "TestRMSE_M4", "TestRMSE_M5", "TestRMSE_M6", "TestRMSE_M7", 
+                        "TestRMSE_M8", "TestRMSE_M9", "TestWinner", "TrainWinner")
+  result
+}
+
+#run simulations 500 times for values of sigma: 1, 2, 4
+sim1_sigma1 = simulate2(500, 1)
+sim2_sigma2 = simulate2(500, 2)
+sim3_sigma3 = simulate2(500, 4)
+
+
+get_means = function(data){
+  end = ncol(data) -2
+  model_means = rep(0, end)
+  for(i in 1:end) {
+    model_means[i] = mean(sim1_sigma1[, i])
+  }
+  model_means
+}
+
+sim1_means = get_means(sim1_sigma1)
+sim2_means = get_means(sim2_sigma2)
+sim3_means = get_means(sim3_sigma3)
+
+
+
+```
+
+
+###Results
+```{r fig.height=20, fig.width=10}
+#setting to a 3x1
+par(mfrow = c(3,2))
+
+plot.new()
+
+hist(sim1_sigma1$TestWinner, 
+     main   = "Simulation Model Selected based on Test Data",
+     xlab   = "Number of predictors in model",
+     col    = "dodgerblue",
+     border = "darkorange", axis(side=1, at=seq(0,10, 1)))
+
+hist(sim1_sigma1$TrainWinner,
+     main   = "Simulation Model Selected based on Train Data",
+     xlab   = "Number of predictors in model",
+     col    = "dodgerblue",
+     border = "darkorange", axis(side=1, at=seq(0,10, 1)))
+
+hist(sim2_sigma2$TestWinner, 
+     main   = "Simulation Model Selected based on Test Data",
+     xlab   = "Number of predictors in model",
+     col    = "dodgerblue",
+     border = "darkorange", axis(side=1, at=seq(0,10, 1)))
+
+hist(sim2_sigma2$TrainWinner,
+     main   = "Simulation Model Selected based on Train Data",
+     xlab   = "Number of predictors in model",
+     col    = "dodgerblue",
+     border = "darkorange", axis(side=1, at=seq(0,10, 1)))
+
+hist(sim3_sigma3$TestWinner, 
+     main   = "Simulation Model Selected based on Test Data",
+     xlab   = "Number of predictors in model",
+     col    = "dodgerblue",
+     border = "darkorange", axis(side=1, at=seq(0,10, 1)))
+
+hist(sim3_sigma3$TrainWinner,
+     main   = "Simulation Model Selected based on Train Data",
+     xlab   = "Number of predictors in model",
+     col    = "dodgerblue",
+     border = "darkorange", axis(side=1, at=seq(0,10, 1)))
+dev.off()
+```
+
+```{r}
+par(mfrow = c(1,3))
+#plot for sigma = 1 RMSE Mean 
+plot(sim1_means[1:9], pch = 20, col = "dodgerblue", cex = 1,
+     xlab = "Mean RMSE Response for a model with x predictors",
+     ylab = "RMSE",
+     main = "Simulated Regression Data")
+points(sim1_means[10:18], pch = 20, col = "darkorange", cex = 1)
+lines(sim1_means[10:18], col = "darkorange")
+lines(sim1_means[1:9], col = "dodgerblue")
+
+#plot for sigma = 2 RMSE Mean 
+plot(sim2_means[1:9], pch = 20, col = "dodgerblue", cex = 1,
+     xlab = "Mean RMSE Response for a model with x predictors",
+     ylab = "RMSE",
+     main = "Simulated Regression Data")
+points(sim2_means[10:18], pch = 20, col = "darkorange", cex = 1)
+lines(sim2_means[10:18], col = "darkorange")
+lines(sim2_means[1:9], col = "dodgerblue")
+
+
+#plot for sigma = 4 RMSE Mean 
+plot(sim3_means[1:9], pch = 20, col = "dodgerblue", cex = 1,
+     xlab = "Mean RMSE Response for a model with x predictors",
+     ylab = "RMSE",
+     main = "Simulated Regression Data")
+points(sim3_means[10:18], pch = 20, col = "darkorange", cex = 1)
+lines(sim3_means[10:18], col = "darkorange")
+lines(sim3_means[1:9], col = "dodgerblue")
+
+dev.off()
+```
+
+
+###Discussion
+Does this method **always** select the correct model?  On average does it select the correct model.  How does noise affect the results
+
+
+## Simulation Study 1
+
+###Introduction
+
+###Methods
+
+```{r}
+birthday = 19810803
+set.seed(birthday)
+
+num_sims = 1000 # number of simulations
+x_values = seq(0, 5, length = 25)
+n        = length(x_values)   # sample size
+alpha    = c(0.01,0.05,0.10)
+beta_1   = seq(0, 3, .1)
+p_value  = rep(0, length(beta_1))
+
+
+simulate3 = function(num_sim, sigma){
+  p_values = matrix(0, num_sim,  length(beta_1))  
+  for(sim in 1: num_sim){
+    for(i in 1:length(beta_1)) {
+      signal   = x_values * beta_1[i]
+      eps      = rnorm(25, mean= 0, sd = sigma)
+      y        = signal + eps
+      fit      = lm(y ~ x_values)
+      p_value[i] = summary(fit)$coefficients[2,4]
+    }
+    p_values[sim, ]  = p_value
+  }
+  as.data.frame(p_values)
+}
+
+get_power = function(data, alpha){
+  pwr = matrix(0, nrow = length(alpha), ncol = ncol(data))
+  for (j in 1: length(alpha)){
+    rejectHo = rep(0, ncol(data))
+    for (i in 1: ncol(data)){
+      #we should reject Ho when beta > 0
+      rejectHo[i] = sum(data[ , i] < alpha[j])
+    }
+    pwr[ j ,  ] = rejectHo/nrow(data)  
+  }
+  pwr = as.data.frame(pwr)
+  colnames(pwr) = beta_1
+  pwr
+}
+
+#simulate for sigma = 1
+data_sigma1  = simulate3(1000, 1)
+#get power power = #tests rejected/#simulations for a given beta_1 value
+power_sigma1 = get_power(data_sigma1, alpha)
+
+#simulate for sigma = 2
+data_sigma2  = simulate3(1000, 2)
+#get power power = #tests rejected/#simulations for a given beta_1 value
+power_sigma2 = get_power(data_sigma2, alpha)
+
+#simulate for sigma = 4
+data_sigma3  = simulate3(1000, 4)
+#get power power = #tests rejected/#simulations for a given beta_1 value
+power_sigma3 = get_power(data_sigma3, alpha)
+```
+
+
+
+###Results
+
+```{r fig.height=20, fig.width=10}
+#setting to a 3x1
+par(mfrow = c(3,1))
+
+#Sigma = 1
+par(mar = c(5, 5, 2, 2)) # adjusted plot margins, otherwise the "hat" does not display
+
+plot(beta_1, power_sigma1[1, ], pch = 20, col = "dodgerblue", cex = 1,
+     xlab = expression(hat(beta)[1] ~ "values"),
+     ylab = expression(hat(Power)),
+     main = expression(hat(Power) ~ "for " ~ sigma ~ " = 1"))
+
+points(beta_1, power_sigma1[2, ], pch = 20, col = "darkorange", cex = 1)
+
+points(beta_1, power_sigma1[3, ], pch = 20, col = "red", cex = 1)
+
+lines(beta_1, power_sigma1[1, ], col = "dodgerblue")
+
+lines(beta_1, power_sigma1[2, ], col = "darkorange")
+
+lines(beta_1, power_sigma1[3, ], col = "red")
+
+legend("bottomright", c(expression(alpha ~ " = 0.01" ), expression(alpha ~ "= 0.05"), expression(alpha ~ "= 0.10")), lty = 1, lwd = 2,
+       col = c("dodgerblue", "darkorange", "red"), adj = c(0.2, 0.6))
+
+#Sigma = 2
+
+par(mar = c(5, 5, 2, 2)) # adjusted plot margins, otherwise the "hat" does not display
+
+plot(beta_1, power_sigma2[1, ], pch = 20, col = "dodgerblue", cex = 1,
+     xlab = expression(hat(beta)[1] ~ "values"),
+     ylab = expression(hat(Power)),
+     main = expression(hat(Power) ~ "for " ~ sigma ~ " = 2"))
+
+points(beta_1, power_sigma2[2, ], pch = 20, col = "darkorange", cex = 1)
+
+points(beta_1, power_sigma2[3, ], pch = 20, col = "red", cex = 1)
+
+lines(beta_1, power_sigma2[1, ], col = "dodgerblue")
+
+lines(beta_1, power_sigma2[2, ], col = "darkorange")
+
+lines(beta_1, power_sigma2[3, ], col = "red")
+
+legend("bottomright", c(expression(alpha ~ " = 0.01" ), expression(alpha ~ "= 0.05"), expression(alpha ~ "= 0.10")), lty = 1, lwd = 2,
+       col = c("dodgerblue", "darkorange", "red"), adj = c(0.2, 0.6))
+
+
+#Sigma = 3
+
+par(mar = c(5, 5, 2, 2)) # adjusted plot margins, otherwise the "hat" does not display
+
+plot(beta_1, power_sigma3[1, ], pch = 20, col = "dodgerblue", cex = 1,
+     xlab = expression(hat(beta)[1] ~ "values"),
+     ylab = expression(hat(Power)),
+     main = expression(hat(Power) ~ "for " ~ sigma ~ " = 4"))
+
+points(beta_1, power_sigma3[2, ], pch = 20, col = "darkorange", cex = 1)
+
+points(beta_1, power_sigma3[3, ], pch = 20, col = "red", cex = 1)
+
+lines(beta_1, power_sigma3[1, ], col = "dodgerblue")
+
+lines(beta_1, power_sigma3[2, ], col = "darkorange")
+
+lines(beta_1, power_sigma3[3, ], col = "red")
+
+legend("bottomright", c(expression(alpha ~ " = 0.01" ), expression(alpha ~ "= 0.05"), expression(alpha ~ "= 0.10")), lty = 1, lwd = 2,
+       col = c("dodgerblue", "darkorange", "red"), adj = c(0.2, 0.6))
+```
+
+
+###Discussion
+

@@ -1,0 +1,286 @@
+---
+title: "Question 2 only"
+author: "Megan Masanz"
+date: "June 26, 2017"
+output: html_document
+---
+
+##2.0 Simulation Study 2
+
+###2.1 Introduction
+The intent of this simulation study is to explore how well the TEST RMSE will select the correct model through simulation.  During this simulation study a dataset will be randomly split the data into 2 sets of data (300 observations for training, 300 observations for testing),  between a train dataset and a test dataset evenly over 500 simulations.  The dataset used for this simulation comes from data stored in [`study_2.csv](study_2.csv) which contains values of the 9 predictors with a sample size of 600.  
+
+During each of the 500 simulations, a total of 9 models will be fit, and the Train and Test RMSE will be calculated for 3 different values of $\sigma \in (1,2, 4)$  We would expect to see the Train datasets RMSE decrease as the number of predictors increases, and we would expect to see the lowest RMSE for the true model:
+
+$$Y_i = \beta_0 + \beta_1 x_{i1} + \beta_2 x_{i2} + \beta_3 x_{i3} + \beta_4 x_{i4} + \beta_5 x_{i5} + \epsilon_i$$
+where $\epsilon_i \sim N(0, \sigma^2)$ and
+
+- \beta_0 = 0
+- \beta_1 = 6
+- \beta_2 = -3.5
+- \beta_3 = 1.7
+- \beta_4 = -1.1
+- \beta_5 = 0.7
+
+The nine models to be fit are:
+
+- `y ~ x1`
+- `y ~ x1 + x2`
+- `y ~ x1 + x2 + x3`
+- `y ~ x1 + x2 + x3 + x4`
+- **`y ~ x1 + x2 + x3 + x4 + x5`**, the correct form of the model
+- `y ~ x1 + x2 + x3 + x4 + x5 + x6`
+- `y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7`
+- `y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + x8`
+- `y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + x8 + x9`
+
+
+For each of the models above, during each 500 simulation, the Train and Test RMSE values are calculated for the 3 values of $\sigma$.
+
+
+$$\text{RMSE}(\text{model, data}) = \sqrt{\frac{1}{n} \sum_{i = 1}^{n}(y_i - \hat{y}_i)^2}$$
+
+###2.2 Methods
+
+```{r}
+#set seed
+birthday = 19810803
+set.seed(birthday)
+
+#set known model parameters
+beta_0 = 0
+beta_1 = 6
+beta_2 = -3.5
+beta_3 = 1.7
+beta_4 = -1.1
+beta_5 = 0.7
+#set values of sigma for each simulation
+sigma_1 = 1
+sigma_2 = 2
+sigma_3 = 4
+
+num_sims = 500
+sample_size_split = 300
+sample_size_total = 600
+
+library(readr)
+study_2 = read_csv("study_2.csv")
+
+x0 = rep(1, sample_size_total)
+x1 = study_2$x1
+x2 = study_2$x2
+x3 = study_2$x3
+x4 = study_2$x4
+x5 = study_2$x5
+x6 = study_2$x6
+x7 = study_2$x7
+x8 = study_2$x8
+x9 = study_2$x9
+y = rep(0, sample_size_total)
+
+
+sim_data = data.frame(x1, x2, x3, x4, x5,x6, x7, x8, x9,  y)
+
+get_predict = function(model, test_data){
+  test_data$y - predict(model, newdata = test_data)
+}
+
+get_RMSE= function(data) {
+  RMSE   = sqrt( mean(data ^ 2  ))
+}
+
+simulate2 = function(num_sims, sigma){
+  RMSE_train   = matrix(0, nrow = num_sims, ncol = 9)
+  RMSE_test    =  matrix(0, nrow = num_sims, ncol = 9)
+  winner_test  = rep(0, num_sims)
+  winner_train = rep(0, num_sims)
+  
+  for(i in 1:num_sims) {
+      
+    eps = rnorm(sample_size_total, mean = 0 , sd = sigma)
+    
+    sim_data$y = beta_0 * x0 + beta_1 * x1 + beta_2 * x2 + beta_3 * x3 + beta_4 * x4 + beta_5 * x5 +   eps
+    
+    train_index = sample(1:nrow(sim_data), sample_size_split)
+    train = sim_data[train_index ,]
+    test  = sim_data[-train_index ,]
+    
+    model_1 = lm( y ~ x1, data = train)
+    model_2 = lm( y ~ x1 + x2, data = train)
+    model_3 = lm( y ~ x1 + x2 + x3, data = train)
+    model_4 = lm( y ~ x1 + x2 + x3 + x4, data = train)
+    model_5 = lm( y ~ x1 + x2 + x3 + x4 + x5, data = train)
+    model_6 = lm( y ~ x1 + x2 + x3 + x4 + x5 + x6, data = train)
+    model_7 = lm( y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7, data = train)
+    model_8 = lm( y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + x8, data = train)
+    model_9 = lm( y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + x8 + x9, data = train)
+    
+    RMSE_train[i ,] = c(get_RMSE(resid(model_1)), get_RMSE(resid(model_2)), get_RMSE(resid(model_3)), get_RMSE(resid(model_4)),
+                      get_RMSE(resid(model_5)), get_RMSE(resid(model_6)), get_RMSE(resid(model_7)), get_RMSE(resid(model_8)),
+                      get_RMSE(resid(model_9))
+                      )
+
+    RMSE_test[i, ] = c(get_RMSE(get_predict(model_1, test)), get_RMSE(get_predict(model_2, test)), 
+                       get_RMSE(get_predict(model_3, test)), get_RMSE(get_predict(model_4, test)), 
+                       get_RMSE(get_predict(model_5, test)), get_RMSE(get_predict(model_6, test)), 
+                       get_RMSE(get_predict(model_7, test)), get_RMSE(get_predict(model_8, test)), 
+                       get_RMSE(get_predict(model_9, test))
+                       )
+    winner_test[i] = which.min(RMSE_test[i, ])
+    winner_train[i] = which.min(RMSE_train[i, ])
+    
+  }
+  result = data.frame(RMSE_train, RMSE_test, winner_test, winner_train) 
+  colnames(result) <- c( "TrainRMSE_M1", "TrainRMSE_M2", "TrainRMSE_M3", "TrainRMSE_M4", "TrainRMSE_M5", "TrainRMSE_M6", 
+                         "TrainRMSE_M7", "TrainRMSE_M8", "TrainRMSE_M9", 
+                         "TestRMSE_M1",  "TestRMSE_M2",  "TestRMSE_M3",  "TestRMSE_M4", "TestRMSE_M5", "TestRMSE_M6", "TestRMSE_M7", 
+                         "TestRMSE_M8",  "TestRMSE_M9",  "TestWinner",   "TrainWinner")
+  result
+}
+
+#run simulations 500 times for values of sigma: 1, 2, 4
+sim1_sigma1 = simulate2(500, 1)
+sim2_sigma2 = simulate2(500, 2)
+sim3_sigma3 = simulate2(500, 4)
+```
+
+###2.3 Results
+
+####2.3.1 Table showing Model Selected based on lowest RMSE
+
+```{r}
+#Summerizing the results into a tables for each value of sigma
+num_models  = 9
+WinnerTest  = rep(0, 9)
+WinnerTrain = rep(0, 9)
+summarize_winners = function(data){
+  for(i in 1: num_models){
+    WinnerTest[i] = nrow(data[(data$TestWinner == i), ])
+    WinnerTrain[i] = nrow(data[(data$TrainWinner == i), ])
+  }
+  predictorVariables = rep(1:9)
+  result = data.frame(predictorVariables, WinnerTest, WinnerTrain)
+  colnames(result) = c("Model Selected", "Num of Sims Model Selected base on Lowest Test RMSE", "Num of Sims Model Selected based on Lowest Train RMSE")
+  result
+}
+
+```
+
+####2.1.2 Table of Model Selected based on lowest RMSE for $\sigma$ = 1
+```{r}
+knitr::kable(summarize_winners(sim1_sigma1), caption = "Model Winner Based on Lowest RMSE Value for $\\sigma$ = 1" )
+```
+
+####2.1.3 Table of Model Selected based on lowest RMSE for $\sigma$ = 2
+```{r}
+knitr::kable(summarize_winners(sim2_sigma2), caption = "Model Winner Based on Lowest RMSE Value for $\\sigma$ = 2" )
+```
+
+####2.1.4 Table of Model Selected based on lowest RMSE for $\sigma$ = 4
+```{r}
+knitr::kable(summarize_winners(sim3_sigma3), caption = "Model Winner Based on Lowest RMSE Value for $\\sigma$ = 4")
+```
+
+
+####2.2.1 Histograms for Model Selected based on lowest RMSE for $\sigma \in (1,2,4)
+```{r fig.height=20, fig.width=10}
+#setting to a 3x1
+par(mfrow = c(3,1))
+
+#plot.new()
+hist(sim1_sigma1$TestWinner)
+
+hist(sim1_sigma1$TestWinner,
+     main   = expression("Simulation Model Selected based on Train Data for" ~ sigma ~ "= 1"),
+     xlab   = "Number of predictors in model",
+     col    = "dodgerblue",
+     border = "darkorange", axis(side=1, at=seq(0,10, 1)))
+
+hist(sim2_sigma2$TestWinner,
+     main   = expression("Simulation Model Selected based on Train Data for" ~ sigma ~ "= 2"),
+     xlab   = "Number of predictors in model",
+     col    = "dodgerblue",
+     border = "darkorange", axis(side=1, at=seq(0,10, 1)))
+
+hist(sim3_sigma3$TestWinner,
+     main   = expression("Simulation Model Selected based on Train Data for" ~ sigma ~ "= 4"),
+     xlab   = "Number of predictors in model",
+     col    = "dodgerblue",
+     border = "darkorange", axis(side=1, at=seq(0,10, 1)))
+#dev.off()
+```
+####2.2.1 Plot of average train RMSE and average Test RMSE change as a fuction of model size
+```{r}
+#summerizing data to get the means
+get_means = function(data){
+  end = ncol(data) -2
+  model_means = rep(0, end)
+  for(i in 1:end) {
+    model_means[i] = mean(data[, i])
+  }
+  model_means
+}
+
+sim1_means = get_means(sim1_sigma1)
+sim2_means = get_means(sim2_sigma2)
+sim3_means = get_means(sim3_sigma3)
+
+par(mfrow = c(1,3))
+#plot for sigma = 1 RMSE Mean 
+plot(sim1_means[1:9], pch = 20, col = "dodgerblue", cex = 1,
+     xlab = "Model Size, f(model size)",
+     ylab = "RMSE",
+     main = expression("Mean RMSE changes as a function of model size" ~ sigma ~ "= 1"))
+points(sim1_means[10:18], pch = 20, col = "darkorange", cex = 1)
+
+lines(sim1_means[10:18], col = "darkorange")
+lines(sim1_means[1:9],   col = "dodgerblue")
+
+legend("topright", c("Train RMSE", "Test RMSE"), lty = c(1,1,1), lwd = 2,
+       col = c("dodgerblue", "darkorange"), adj = c(0.2, 0.6), cex=0.75)
+
+
+#plot for sigma = 2 RMSE Mean 
+plot(sim2_means[1:9], pch = 20, col = "dodgerblue", cex = 1,
+     xlab = "Model Size, f(model size)",
+     ylab = "RMSE",
+     main = expression("Mean RMSE changes as a function of model size" ~ sigma ~ "= 2"))
+points(sim2_means[10:18], pch = 20, col = "darkorange", cex = 1)
+
+lines(sim2_means[10:18], col = "darkorange")
+lines(sim2_means[1:9],   col = "dodgerblue")
+
+legend("topright", c("Train RMSE", "Test RMSE"), lty = c(1,1,1), lwd = 2,
+       col = c("dodgerblue", "darkorange"), adj = c(0.2, 0.6), cex=0.75)
+
+#sigma = 4
+#plot for sigma = 1 RMSE Mean 
+plot(sim3_means[1:9], pch = 20, col = "dodgerblue", cex = 1,
+     xlab = "Model Size, f(model size)",
+     ylab = "RMSE",
+     main = expression("Mean RMSE changes as a function of model size" ~ sigma ~ "= 4"))
+points(sim1_means[10:18], pch = 20, col = "darkorange", cex = 1)
+
+lines(sim3_means[10:18], col = "darkorange")
+lines(sim3_means[1:9],   col = "dodgerblue")
+
+legend("topright", c("Train RMSE", "Test RMSE"), lty = c(1,1,1), lwd = 2,
+       col = c("dodgerblue", "darkorange"), adj = c(0.2, 0.6), cex=0.75)
+
+
+#dev.off()
+```
+
+###2.4 Discussion
+
+During each simulation, the model with the lowest RMSE for train and test was noted in the following tables:
+
+- [2.1.2 Table of Model Selected based on lowest RMSE for $\sigma$ = 1]
+- [2.1.3 Table of Model Selected based on lowest RMSE for $\sigma$ = 2]
+- [2.1.4 Table of Model Selected based on lowest RMSE for $\sigma$ = 4]
+
+This method will **not** always select the correct model.  
+
+As expected, and shown in tables, the model with the largest number of predictors will have the lowest RMSE for the test data, this was the case for all values of $\sigma$.  An interesting observation is that as $\sigma$ increases, our ability to select the correct model through RMSE training data decreases - said another way - when variance is increased our ability to select the correct model decreases.
+
+Given the training RMSE will always select the model with the highest number of predictors, you can find a histogram showing the models selected using **test** data for each value of $\sigma in (1, 2, 4)$ in section [2.2.1 Histograms for Model Selected based on lowest RMSE for $\sigma \in (1,2,4)] which present this data in a graphical form.

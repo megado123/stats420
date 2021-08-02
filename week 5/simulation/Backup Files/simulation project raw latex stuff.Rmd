@@ -1,0 +1,52 @@
+---
+title: "Simulation Project"
+author: "Megan Masanz"
+date: "June 19, 2017"
+output: html_document
+---
+
+$$
+\hat{y} = 1 + -1 x_1 + 1 x2
+$$
+
+
+```{r}
+#summary(model)
+```
+
+## Matrix Approach
+$$
+Y = X \beta + \epsilon
+$$
+
+
+$$
+\hat{\beta} \left(X^\top X \right)^{-1} X^\top y
+$$
+
+
+$$
+e = y - \hat{y}
+$$
+
+
+$$
+s_e^2 = \frac{\sum_{i = 1}^n (y_i - \hat{y}_i^2)}{n-p} = \frac{e^\top e}{n-p}
+$$
+
+
+
+$$
+  \text{SD}[\hat{y}(x_0)] = \sigma  \sqrt{x_{0}^\top\left(X^\top X\right)^{-1}x_{0}}
+
+$$
+
+
+
+
+
+
+
+
+
+

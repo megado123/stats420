@@ -1,0 +1,612 @@
+---
+title: "Week 3 - Homework"
+author: "STAT 420, Summer 2017, Dalpiaz"
+date: ''
+output:
+  html_document: 
+    toc: yes
+  pdf_document: default
+---
+
+## Exercise 1 (Using `lm` for Inference)
+
+For this exercise we will use the `cats` dataset from the `MASS` package. You should use `?cats` to learn about the background of this dataset.
+
+**(a)** Fit the following simple linear regression model in `R`. Use heart weight as the response and body weight as the predictor. 
+
+\[
+Y_i = \beta_0 + \beta_1 x_i + \epsilon_i
+\]
+
+Store the results in a variable called `cat_model`. Use a $t$ test to test the significance of the regression. Report the following:
+
+- The null and alternative hypotheses
+- The value of the test statistic
+- The p-value of the test
+- A statistical decision at $\alpha = 0.01$
+- A conclusion in the context of the problem
+
+When reporting these, you should explicitly state them in your document, not assume that a reader will find and interpret them from a large block of `R` output.
+
+**Solution:**
+
+```{r, solution = TRUE}
+library(MASS)
+cat_model = lm(Hwt ~ Bwt, data = cats)
+summary(cat_model)
+summary(cat_model)$coefficients["Bwt", "t value"] #test statistic
+summary(cat_model)$coefficients["Bwt", "Pr(>|t|)"] #p-value
+```
+
+
+- $H_0: \beta_1 = 0$
+- $H_1: \beta_1 \neq 0$
+
+- Test statistic: $t = `r summary(cat_model)$coefficients["Bwt", "t value"]`$
+- P-value: $`r summary(cat_model)$coefficients["Bwt", "Pr(>|t|)"]`$
+- Decision: **Reject** $H_0$ at $\alpha = 0.01$.
+- Conclusion: There is a linear relationship between heart weight and body weight.
+
+**(b)** Calculate a 99% confidence interval for $\beta_1$. Give an interpretation of the interval in the context of the problem.
+
+**Solution:**
+
+```{r, solution = TRUE}
+confint(cat_model, "Bwt", level = 0.99)
+```
+
+A 99% confidence interval for $\beta_1$ is given by
+
+\[
+(`r confint(cat_model, "Bwt", level = 0.99)[1]`, `r confint(cat_model, "Bwt", level = 0.99)[2]`).
+\]
+
+Notice that this interval does **not** contain 0, which suggests that 0 is not a plausible value for $\beta_1$. This notion matches our result from the previous hypothesis test.
+
+Interpretation: We are 99% confident that given a 1 kilogram increase in body weight, the average increase in heart weight will be between `r confint(cat_model, "Bwt", level = 0.99)[1]` and `r confint(cat_model, "Bwt", level = 0.99)[2]` grams.
+
+**(c)** Calculate a 90% confidence interval for $\beta_0$. Give an interpretation of the interval in the context of the problem.
+
+**Solution:**
+
+```{r, solution = TRUE}
+confint(cat_model, "(Intercept)", level = 0.90)
+```
+
+A 90% confidence interval for $\beta_0$ is given by
+
+\[
+(`r confint(cat_model, "(Intercept)", level = 0.90)[1]`, `r confint(cat_model, "(Intercept)", level = 0.90)[2]`).
+\]
+
+Interpretation: Mathematically, we are 90% confident that for a body weight of 0 kilograms, the average heart weight will be between `r confint(cat_model, "(Intercept)", level = 0.90)[1]` and `r confint(cat_model, "(Intercept)", level = 0.90)[2]` grams.
+
+However, this confidence interval has no **practical** explanation because it is nonsense to consider the heart weight of a cat that weighs 0 kilograms.
+
+**(d)** Use a 95% confidence interval to estimate the mean heart weight for body weights of 2.5 and 3.0 kilograms Which of the two intervals is wider? Why?
+
+**Solution:**
+
+```{r, solution = TRUE}
+new_body_weights = data.frame(Bwt = c(2.5, 3.0))
+(heart_weight_ci = predict(cat_model, newdata = new_body_weights, 
+                           interval = c("confidence"), level = 0.95))
+```
+
+
+We are 95% confident that the mean heart weight for a body weight of 2.5 kilograms is in the interval
+
+\[
+(`r heart_weight_ci[1, "lwr"]`, `r heart_weight_ci[1, "upr"]`).
+\]
+
+We are 95% confident that the mean heart weight for a body weight of 3.0 kilograms is in the interval
+
+\[
+(`r heart_weight_ci[2, "lwr"]`, `r heart_weight_ci[2, "upr"]`).
+\]
+
+```{r, solution = TRUE}
+mean(cats$Bwt)
+range(cats$Bwt)
+```
+
+The interval for a body weight of 3.0 kilograms is larger since it is further from the sample mean body weight. Also, note that both body weights fall within the range of observed body weights.
+
+```{r, solution = TRUE}
+heart_weight_ci = unname(heart_weight_ci) #removes name information for future display
+heart_weight_ci[, 2:3]
+diff(heart_weight_ci[1, 2:3])
+diff(heart_weight_ci[2, 2:3])
+diff(heart_weight_ci[1, 2:3]) < diff(heart_weight_ci[2, 2:3])
+```
+
+**(e)** Use a 95% prediction interval to predict the heart weight for body weights of 2.5 and 4.0 kilograms.
+
+**Solution:**
+
+```{r, solution = TRUE}
+new_body_weights = data.frame(Bwt = c(2.5, 4.0))
+(heart_weight_pi = predict(cat_model, newdata = new_body_weights, 
+                           interval = c("prediction"), level = 0.95))
+```
+
+
+We are 95% confident that a *new* **observation** of heart weight for a body weight of 2.5 kilograms is in the interval
+
+\[
+(`r heart_weight_pi[1, "lwr"]`, `r heart_weight_pi[1, "upr"]`).
+\]
+
+We are 95% confident that a *new* **observation** of heart weight for a body weight of 4.0 kilograms is in the interval
+
+\[
+(`r heart_weight_pi[2, "lwr"]`, `r heart_weight_pi[2, "upr"]`).
+\]
+
+Note that the prediction interval for a body weight of 2.5 kilograms is wider than the confidence interval for the same body weight found in **(d)**.
+
+```{r, solution = TRUE}
+heart_weight_pi = unname(heart_weight_pi)
+diff(heart_weight_ci[1, 2:3]) < diff(heart_weight_pi[1, 2:3])
+```
+
+**(f)** Create a scatterplot of the data. Add the regression line, 95% confidence bands, and 95% prediction bands.
+
+**Solution:**
+
+```{r, fig.height = 6, fig.width = 8, solution = TRUE}
+bw_grid = seq(min(cats$Bwt), max(cats$Bwt), by = 0.01)
+
+hw_ci_band = predict(cat_model, newdata = data.frame(Bwt = bw_grid), 
+                     interval = "confidence") 
+hw_pi_band = predict(cat_model, newdata = data.frame(Bwt = bw_grid), 
+                     interval = "prediction") 
+
+plot(Hwt ~ Bwt, data = cats,
+     xlab = "Body Weight (kg)", 
+     ylab = "Heart Weight (g)",
+     main = "Cats: Heart Weight vs Body Weight",
+     pch  = 20,
+     cex  = 2,
+     col  = "grey",
+     ylim = c(min(hw_pi_band), max(hw_pi_band)))
+
+abline(cat_model, lwd = 5, col = "darkorange")
+lines(bw_grid, hw_ci_band[,"lwr"], col = "dodgerblue", lwd = 3, lty = 2)
+lines(bw_grid, hw_ci_band[,"upr"], col = "dodgerblue", lwd = 3, lty = 2)
+lines(bw_grid, hw_pi_band[,"lwr"], col = "dodgerblue", lwd = 3, lty = 3)
+lines(bw_grid, hw_pi_band[,"upr"], col = "dodgerblue", lwd = 3, lty = 3)
+```
+
+Notice that, while the vast majority of the data points are within the prediction bands, very few points are within the confidence bands.
+
+## Exercise 2 (Using `lm` for Inference)
+
+For this exercise we will use the `diabetes` dataset, which can be found in the `faraway` package.
+
+**(a)** Fit the following simple linear regression model in `R`. Use the total cholesterol as the response and weight as the predictor. 
+
+\[
+Y_i = \beta_0 + \beta_1 x_i + \epsilon_i
+\]
+
+Store the results in a variable called `cholesterol_model`. Use a $t$ test to test the significance of the regression. Report the following:
+
+- The null and alternative hypotheses
+- The value of the test statistic
+- The p-value of the test
+- A statistical decision at $\alpha = 0.05$
+- A conclusion in the context of the problem
+
+When reporting these, you should explicitly state them in your document, not assume that a reader will find and interpret them from a large block of `R` output.
+
+**Solution:**
+
+```{r, solution = TRUE}
+library(faraway)
+cholesterol_model = lm(chol ~ weight, data = diabetes)
+summary(cholesterol_model)$coefficients["weight", "t value"] #test statistic
+summary(cholesterol_model)$coefficients["weight", "Pr(>|t|)"] #p-value
+```
+
+
+- $H_0: \beta_1 = 0$, $Y_i = \beta_0 + \epsilon_i$
+- $H_1: \beta_1 \neq 0$, $Y_i = \beta_0 + \beta_1 x_i + \epsilon_i$
+
+- Test statistic: $t = `r summary(cholesterol_model)$coefficients["weight", "t value"]`$
+- P-value: $`r summary(cholesterol_model)$coefficients["weight", "Pr(>|t|)"]`$
+- Decision: **Fail to Reject** $H_0$ at $\alpha = 0.05$.
+- Conclusion: There is **not** a linear relationship between cholesterol and weight.
+
+**(b)** Fit the following simple linear regression model in `R`. Use HDL as the response and weight as the predictor. 
+
+\[
+Y_i = \beta_0 + \beta_1 x_i + \epsilon_i
+\]
+
+Store the results in a variable called `hdl_model`. Use a $t$ test to test the significance of the regression. Report the following:
+
+- The null and alternative hypotheses
+- The value of the test statistic
+- The p-value of the test
+- A statistical decision at $\alpha = 0.05$
+- A conclusion in the context of the problem
+
+When reporting these, you should explicitly state them in your document, not assume that a reader will find and interpret them from a large block of `R` output.
+
+**Solution:**
+
+```{r, solution = TRUE}
+hdl_model = lm(hdl ~ weight, data = diabetes)
+summary(hdl_model)$coefficients["weight", "t value"] #test statistic
+summary(hdl_model)$coefficients["weight", "Pr(>|t|)"] #p-value
+```
+
+
+- $H_0: \beta_1 = 0$, $Y_i = \beta_0 + \epsilon_i$
+- $H_1: \beta_1 \neq 0$, $Y_i = \beta_0 + \beta_1 x_i + \epsilon_i$
+
+- Test statistic: $t = `r summary(hdl_model)$coefficients["weight", "t value"]`$
+- P-value: $`r summary(hdl_model)$coefficients["weight", "Pr(>|t|)"]`$
+- Decision: **Reject** $H_0$ at $\alpha = 0.05$.
+- Conclusion: There is a linear relationship between HDL and weight.
+
+## Exercise 3 (Inference "without" `lm`)
+
+Write a function named `get_p_val_beta_1` that performs the test
+
+$$
+H_0: \beta_1 = \beta_{10} \quad \text{vs} \quad H_1: \beta_1 \neq \beta_{10}
+$$
+
+for the linear model
+
+$$
+Y_i = \beta_0 + \beta_1 x_i + \epsilon_i.
+$$
+
+The function should take two inputs:
+
+- A model object that is the result of fitting the SLR model with `lm()`
+- A hypothesized value of $\beta_1$, $\beta_{10}$, with a default value of 0
+
+The function should return a named vector with elements:
+
+- `t`, which stores the value of the test statistic for performing the test
+- `p_val`, which stores the p-value for performing the test
+
+**(a)** After writing the function, run these three lines of code:
+
+```{r, eval = FALSE}
+get_p_val_beta_1(cat_model, beta_1 = 4.2)
+get_p_val_beta_1(cholesterol_model)
+get_p_val_beta_1(hdl_model)
+```
+
+**Solution:**
+
+```{r, solution = TRUE}
+get_p_val_beta_1 = function(model, beta_1 = 0) {
+  n = length(resid(model))
+  est = summary(model)$coefficients[2, "Estimate"]
+  se = summary(model)$coefficients[2, "Std. Error"]
+  t = (est - beta_1) / se
+  p_val = 2 * pt(abs(t), df = n - 2, lower.tail = FALSE)
+  c(t = t, p_val = p_val)
+}
+```
+
+```{r, solution = TRUE}
+get_p_val_beta_1(cat_model, beta_1 = 4.2)
+get_p_val_beta_1(cholesterol_model)
+get_p_val_beta_1(hdl_model)
+```
+
+**(b)** Return to the goalies dataset from the previous homework, which is stored in [`goalies.csv`](goalies.csv). Fit a simple linear regression model with `W` as the response and `MIN` as the predictor. Store the results in a variable called `goalies_model_min`. After doing so, run these three lines of code:
+
+```{r, eval = FALSE}
+get_p_val_beta_1(goalies_model_min)
+get_p_val_beta_1(goalies_model_min, beta_1 = coef(goalies_model_min)[2])
+get_p_val_beta_1(goalies_model_min, beta_1 = 0.008)
+```
+
+**Solution:**
+
+```{r, solution = TRUE}
+goalies = read.csv("goalies.csv")
+goalies_model_min = lm(W ~ MIN, data = goalies)
+```
+
+```{r, solution = TRUE}
+get_p_val_beta_1(goalies_model_min)
+get_p_val_beta_1(goalies_model_min, beta_1 = coef(goalies_model_min)[2])
+get_p_val_beta_1(goalies_model_min, beta_1 = 0.008)
+```
+
+## Exercise 4 (Simulating Sampling Distributions)
+
+For this exercise we will simulate data from the following model:
+
+\[
+Y_i = \beta_0 + \beta_1 x_i + \epsilon_i
+\]
+
+Where $\epsilon_i \sim N(0, \sigma^2).$ Also, the parameters are known to be:
+
+- $\beta_0 = 3$
+- $\beta_1 = 0.75$
+- $\sigma^2 = 25$
+
+We will use samples of size $n = 42$.
+
+**(a)** Simulate this model $1500$ times. Each time use `lm()` to fit a simple linear regression model, then store the value of $\hat{\beta}_0$ and $\hat{\beta}_1$. Set a seed using **your** birthday before performing the simulation. Note, we are simulating the $x$ values once, and then they remain fixed for the remainder of the exercise.
+
+```{r}
+birthday = 18760613
+set.seed(birthday)
+n = 42
+x = seq(0, 20, length = n)
+```
+
+**Solution:**
+
+```{r, solution = TRUE}
+beta_0    = 3
+beta_1    = 0.75
+sigma     = 5
+true_line = beta_0 + beta_1 * x
+
+num_sim   = 1500
+beta_hats = matrix(0, num_sim, 2)
+for (i in 1:num_sim) {
+  y = true_line + rnorm(n, mean = 0, sd = sigma)
+  beta_hats[i, ] = coef(lm(y ~ x))
+}
+
+beta_0_hats = beta_hats[, 1]
+beta_1_hats = beta_hats[, 2]
+```
+
+**(b)** For the *known* values of $x$, what is the expected value of $\hat{\beta}_1$?
+
+**Solution:**
+
+\[
+\hat{\beta}_1 \sim N\left(\beta_1, \sigma^2/S_{xx}\right)
+\]
+
+\[
+\text{E}[\hat{\beta}_1] = `r beta_1`
+\]
+
+**(c)** For the known values of $x$, what is the standard deviation of $\hat{\beta}_1$?
+
+**Solution:**
+
+```{r, solution = TRUE}
+Sxx = sum((x - mean(x)) ^ 2)
+sigma / sqrt(Sxx)
+```
+
+\[
+\text{SD}[\hat{\beta}_1] = `r sigma / sqrt(Sxx)`
+\]
+
+**(d)** What is the mean of your simulated values of $\hat{\beta}_1$? Does this make sense given your answer in **(b)**?
+
+**Solution:**
+
+```{r, solution = TRUE}
+mean(beta_1_hats)
+```
+
+Yes, this is close to the true mean of $\beta_1$.
+
+**(e)** What is the standard deviation of your simulated values of $\hat{\beta}_1$? Does this make sense given your answer in **(c)**?
+
+**Solution:**
+
+```{r, solution = TRUE}
+sd(beta_1_hats)
+```
+
+Yes, this is close to the true standard deviation of $\beta_1$.
+
+**(f)** For the known values of $x$, what is the expected value of $\hat{\beta}_0$?
+
+**Solution:**
+
+\[
+\hat{\beta}_0 \sim N\left(\beta_0, \sigma^2(1/n + \bar{x}^2/S_{xx})\right)
+\]
+
+\[
+\text{E}[\hat{\beta}_0] = `r beta_0`
+\]
+
+**(g)** For the known values of $x$, what is the standard deviation of $\hat{\beta}_0$?
+
+**Solution:**
+
+```{r, solution = TRUE}
+sigma * sqrt(1 / n + mean(x) ^ 2 / Sxx)
+```
+
+\[
+\text{SD}[\hat{\beta}_0] = `r sigma * sqrt(1 / n + mean(x) ^ 2 / Sxx)`
+\]
+
+**(h)** What is the mean of your simulated values of $\hat{\beta}_0$? Does this make sense given your answer in **(f)**?
+
+**Solution:**
+
+```{r, solution = TRUE}
+mean(beta_0_hats)
+```
+
+Yes, this is close to the true mean of $\beta_0$.
+
+**(i)** What is the standard deviation of your simulated values of $\hat{\beta}_0$? Does this make sense given your answer in **(g)**?
+
+**Solution:**
+
+```{r, solution = TRUE}
+sd(beta_0_hats)
+```
+
+Yes, this is close to the true standard deviation of $\beta_0$.
+
+**(j)** Plot a histogram of your simulated values for $\hat{\beta}_1$. Add the normal curve for the true sampling distribution of $\hat{\beta}_1$.
+
+**Solution:**
+
+```{r, solution = TRUE}
+hist(beta_1_hats, breaks = 25, col = "darkorange", border = "dodgerblue", 
+     prob = TRUE, xlab = expression(hat(beta)[1]), main = "")
+e_beta_1_hat  = beta_1
+sd_beta_1_hat = sigma / sqrt(Sxx)
+curve(dnorm(x, mean = e_beta_1_hat, sd = sd_beta_1_hat), add = TRUE, lwd = 3)
+```
+
+**(k)** Plot a histogram of your simulated values for $\hat{\beta}_0$. Add the normal curve for the true sampling distribution of $\hat{\beta}_0$.
+
+**Solution:**
+
+```{r, solution = TRUE}
+hist(beta_0_hats, breaks = 25, col = "darkorange", border = "dodgerblue", 
+     prob = TRUE, xlab = expression(hat(beta)[0]), main = "")
+e_beta_0_hat  = beta_0
+sd_beta_0_hat = sigma * sqrt(1 / n + mean(x) ^ 2 / Sxx)
+curve(dnorm(x, mean = e_beta_0_hat, sd = sd_beta_0_hat), add = TRUE, lwd = 3)
+```
+
+## Exercise 5 (Simulating Confidence Intervals)
+
+For this exercise we will simulate data from the following model:
+
+\[
+Y_i = \beta_0 + \beta_1 x_i + \epsilon_i
+\]
+
+Where $\epsilon_i \sim N(0, \sigma^2).$ Also, the parameters are known to be:
+
+- $\beta_0 = 1$
+- $\beta_1 = 3$
+- $\sigma^2 = 16$
+
+We will use samples of size $n = 20$.
+
+Our goal here is to use simulation to verify that the confidence intervals really do have their stated confidence level. Do **not** use the `confint()` function for this entire exercise.
+
+**(a)** Simulate this model $2000$ times. Each time use `lm()` to fit a simple linear regression model, then store the value of $\hat{\beta}_0$ and $s_e$. Set a seed using **your** birthday before performing the simulation. Note, we are simulating the $x$ values once, and then they remain fixed for the remainder of the exercise.
+
+```{r}
+birthday = 18760613
+set.seed(birthday)
+n = 20
+x = seq(-5, 5, length = n)
+```
+
+**Solution:**
+
+```{r, solution = TRUE}
+beta_0    = 1
+beta_1    = 3
+sigma     = 4
+true_line = beta_0 + beta_1 * x
+
+num_sim    = 2000
+beta_hat_0 = rep(0, num_sim)
+s_e        = rep(0, num_sim)
+
+for (i in 1:num_sim) {
+  y             = true_line + rnorm(n, 0, sigma)
+  beta_hat_0[i] = coef(lm(y ~ x))[1]
+  s_e[i]        = summary((lm(y ~ x)))$sigma
+}
+```
+
+
+**(b)** For each of the $\hat{\beta}_0$ that you simulated, calculate a 90% confidence interval. Store the lower limits in a vector `lower_90` and the upper limits in a vector `upper_90`. Some hints:
+
+- You will need to use `qt()` to calculate the critical value, which will be the same for each interval.
+- Remember that `x` is fixed, so $S_{xx}$ will be the same for each interval.
+- You could, but do not need to write a `for` loop. Remember vectorized operations.
+
+**Solution:**
+
+Recall,
+
+\[
+\hat{\beta_0} \pm t_{\alpha/2, n - 2} \cdot s_e\sqrt{\frac{1}{n}+\frac{\bar{x}^2}{S_{xx}}}
+\]
+
+```{r, solution = TRUE}
+alpha = 0.10
+t_crit_90 = -qt(alpha / 2, df = n - 2)
+Sxx = sum((x - mean(x)) ^ 2)
+
+lower_90 = beta_hat_0 - t_crit_90 * s_e * sqrt(1 / n + mean(x) ^ 2 / Sxx)
+upper_90 = beta_hat_0 + t_crit_90 * s_e * sqrt(1 / n + mean(x) ^ 2 / Sxx)
+```
+
+
+**(c)** What proportion of these intervals contain the true value of $\beta_0$?
+
+**Solution:**
+
+```{r, solution = TRUE}
+mean(lower_90 < 1 & 1 < upper_90)
+```
+
+Unsurprisingly, the result is near 90%.
+
+**(d)** Based on these intervals, what proportion of the simulations would reject the test $H_0: \beta_0 = 0$ vs $H_1: \beta_0 \neq 0$ at $\alpha = 0.10$?
+
+**Solution:**
+
+```{r, solution = TRUE}
+1 - mean(lower_90 < 0 & 0 < upper_90)
+```
+
+
+**(e)** For each of the $\hat{\beta}_0$ that you simulated, calculate a 99% confidence interval. Store the lower limits in a vector `lower_99` and the upper limits in a vector `upper_99`.
+
+**Solution:**
+
+Recall,
+
+\[
+\hat{\beta_0} \pm t_{\alpha/2, n - 2} \cdot s_e\sqrt{\frac{1}{n}+\frac{\bar{x}^2}{S_{xx}}}
+\]
+
+```{r, solution = TRUE}
+alpha = 0.01
+t_crit_99 = -qt(alpha / 2, df = n - 2)
+Sxx = sum((x - mean(x)) ^ 2)
+
+lower_99 = beta_hat_0 - t_crit_99 * s_e * sqrt(1 / n + mean(x) ^ 2 / Sxx)
+upper_99 = beta_hat_0 + t_crit_99 * s_e * sqrt(1 / n + mean(x) ^ 2 / Sxx)
+```
+
+Note that we could have stored confidence intervals directly when performing the simulation, using `confint()`. However, then we would not have been so easily able to modify the confidence level. We would have needed to perform the simulation again.
+
+**(f)** What proportion of these intervals contain the true value of $\beta_0$?
+
+**Solution:**
+
+```{r, solution = TRUE}
+mean(lower_99 < 1 & 1 < upper_99)
+```
+
+Unsurprisingly, the result is near 99%.
+
+**(g)** Based on these intervals, what proportion of the simulations would reject the test $H_0: \beta_0 = 0$ vs $H_1: \beta_0 \neq 0$ at $\alpha = 0.01$?
+
+**Solution:**
+
+```{r, solution = TRUE}
+1 - mean(lower_99 < 0 & 0 < upper_99)
+```
+

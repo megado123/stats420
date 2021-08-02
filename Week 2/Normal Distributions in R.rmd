@@ -1,0 +1,30 @@
+title: "Normal Distribution in R"
+author: "Megan Masanz"
+date: "May 25, 2017"
+output: html_document
+---
+
+---
+Intelligence IQ scores follow normal 
+normal distribution with mean Mu = 100
+standard deviation (sigma) is 15
+Let X be a random variable for the score after randomly selecitng
+
+$$
+  X \sim N(\mu = 100, \sigma^ 2 = 15^2)
+$$
+```{r}
+
+##plot_norm_prob(mu = 100, sigma = 15, lower = 100, upper = 100)
+```
+
+Probably a person has an IQ less than 115
+
+```{r}
+pnorm(115, 100, 15)
+```
+
+$$
+Z = \frac{X -\mu}{\sigma} \sim N(0,1)
+$$
+

@@ -1,0 +1,950 @@
+---
+title: "Week 6 - Simulation Study"
+author: "STAT 420, Summer 2017, Megan Masanz, netid: mjneuman"
+date: ''
+output:
+  html_document: 
+    toc: yes
+  pdf_document: default
+---
+
+
+##1.0 Simulation Study 1
+
+###1.1 Introduction
+This is a simulation study for a multiple linear regression using the model:
+
+\[
+Y_i = \beta_0 + \beta_1 x_{i1} + \beta_2 x_{i2} + \beta_3 x_{i3}  + \beta_4 x_{i4} + \epsilon_i
+\]
+
+
+where $\epsilon_i \sim N(0, \sigma^2)$ and 
+
+- $\beta_0$ = 2,
+- $\beta_1$ = 1,
+- $\beta_2$ = 1,
+- $\beta_3$ = 1,
+- $\beta_4$ = 1.
+
+
+During this simulation study we will discuss the distribution associated with $\hat{\beta}_1$, $s_e^2$, and $\hat{\text{E}}[Y \mid x_1 = -3, x_2 = 2.5, x_3 = 0.5, x_4 = 0]$
+
+For this simulation study we will use the data stored in [`study_1.csv](study_1.csv) which contains values of the 4 predictors with a sample size of 15.  The code provided within the **methods** section will  run 3000 simulations for three different values of $\sigma \in (1, 5, 10)$.  The variables in the dataset are:
+
+- `x1`
+- `x2`
+- `x3`
+- `x4`
+
+The code provided in the **methods** will simulate data for y given a sigma value, and for the number of simulations provided (3000), it will fit a model, retrieve the $\hat{\beta_1}$ value, retrieve the $\beta_0$, $\beta_1$, $\beta_2$, $\beta_3$, $\beta_4$ values and with matrix multiplication determine a value for $\hat{\text{E}}[Y \mid x_1 = -3, x_2 = 2.5, x_3 = 0.5, x_4 = 0]$
+
+We know the true distributions of the estimates, so questions to be addressed during this simulation study are:
+
+- What are the true distributions of the estimates for:
+    + $\hat{\beta}_1$
+    + $s_e^2$
+    + $\hat{\text{E}}[Y \mid x_1 = -3, x_2 = 2.5, x_3 = 0.5, x_4 = 0]$
+    
+- How do the empirical distributions from the simulations compare to the true distributions?
+
+- How do the distributions change when $\sigma$ is changed
+
+###1.2 Methods
+
+```{r}
+birthday = 19810803
+set.seed(birthday)
+
+library(readr)
+study_1 = read_csv("study_1.csv")
+
+num_sims = 3000 # number of simulations
+n = 15          # sample size
+p = 5           # number of beta parameters
+
+beta_0 = 2
+beta_1 = 1
+beta_2 = 1
+beta_3 = 1
+beta_4 = 1
+sigma_1 = 1
+sigma_2 = 5
+sigma_3 = 10
+
+x0 = rep(1, n)
+x1 = study_1$x1
+x2 = study_1$x2
+x3 = study_1$x3
+x4 = study_1$x4
+X = cbind(x0, x1, x2, x3, x4)
+C = solve(t(X) %*% X)
+y = rep(0, n)
+
+xo = c(1, -3, 2.5, 0.5, 0)
+sim_data = data.frame(x1, x2, x3, x4, y)
+
+simulate = function(num_sims, sigma){
+  
+  beta_hat_1   = rep(0, num_sims)
+  se_squared   = rep(0, num_sims) 
+  y_hat_xo     = rep(0, num_sims)
+
+  for(i in 1:num_sims) {
+    #create noise
+    eps = rnorm(n, mean = 0 , sd = sigma)
+    #simulate y values
+    sim_data$y = beta_0 * x0 + beta_1 * x1 + beta_2 * x2 + beta_3 * x3 + beta_4 * x4 + eps
+    #fit the model
+    fit = lm(y ~ x1 + x2 + x3 + x4, data = sim_data)
+    #extract values of interest
+    beta_hat_1[i]   = coef(fit)[2]
+    se_squared[i]   = (summary(fit)$sigma) ^ 2
+    #calculate beta_hat for matrix multiplication to determine y_hat_xo
+    beta_hat = solve(t(X) %*% X) %*% t(X) %*% sim_data$y
+    y_hat_xo[i] = xo %*% beta_hat
+
+  }
+  data.frame(beta_hat_1 = beta_hat_1, se_squared = se_squared, y_hat_xo = y_hat_xo)
+}
+
+sim1 = simulate(num_sims, sigma_1)
+sim2 = simulate(num_sims, sigma_2)
+sim3 = simulate(num_sims, sigma_3)
+```
+
+###1.3 Results
+```{r}
+#Examine beta_1 for simulations
+
+get_true_variance = function(sigma){
+  sigma ^ 2 * C[1 + 1, 1 + 1]
+}
+
+get_true_sd = function(sigma){
+  sqrt(sigma ^ 2 * C[1 + 1, 1 + 1])
+}
+
+true_mean      = c(beta_1,beta_1, beta_1)
+empirical_mean = c(mean(sim1$beta_hat_1),      mean(sim2$beta_hat_1),      mean(sim3$beta_hat_1))
+true_variance  = c(get_true_variance(sigma_1), get_true_variance(sigma_2), get_true_variance(sigma_3))
+empirical_var  = c(var(sim1$beta_hat_1),       var(sim2$beta_hat_1),       var(sim3$beta_hat_1))
+true_sd        = c(get_true_sd(sigma_1),       get_true_sd(sigma_2),       get_true_sd(sigma_3))
+empirical_sd   = c(sd(sim1$beta_hat_1),        sd(sim2$beta_hat_1),        sd(sim3$beta_hat_1))
+
+simulations    = c("sim 1", "sim 2", "sim 3")
+study_1_sigmas = c(sigma_1, sigma_2, sigma_3)
+
+results = data.frame(simulations, study_1_sigmas, true_mean, empirical_mean, true_variance, empirical_var, true_sd, empirical_sd)
+colnames(results) = c("Simulation Set", "Sigma Value", "True Mean", "Empirical Mean", "True Variance", "Empirical Variance", "True SD", "Empirical SD" )
+
+```
+
+####1.3.1.1 Table for analysis of $\hat{\beta}_1$
+
+```{r}
+knitr::kable(results, caption = "Analysis for True and Empirical Values")
+```
+
+####1.3.1.2 Examine Distribution of $\hat{\beta}_1$
+```{r}
+#examine distibutions
+prob = rep(0, 3)
+get_prob = function(sigma, beta_hat_1){
+  sd_bh1 = sqrt(sigma ^ 2 * C[1 + 1, 1 + 1])
+  prob[1] = mean(beta_1 - 1 * sd_bh1 < beta_hat_1 & beta_hat_1 < beta_1 + 1 * sd_bh1)
+  prob[2] = mean(beta_1 - 2 * sd_bh1 < beta_hat_1 & beta_hat_1 < beta_2 + 2 * sd_bh1)
+  prob[3] = mean(beta_1 - 3 * sd_bh1 < beta_hat_1 & beta_hat_1 < beta_2 + 3 * sd_bh1)
+  prob
+}
+# We expect these to be: 0.68, 0.95, 0.997 since beta_hat_1 follows a normal distribution
+#Get Probability for simulation 1
+get_prob(sigma_1, sim1$beta_hat_1)
+#Get Probability for simulation 2
+get_prob(sigma_2, sim2$beta_hat_1)
+#Get Probability for simulation 3
+get_prob(sigma_3, sim3$beta_hat_1)
+```
+
+####1.3.1.3 Histogram for $\hat{\beta}_1$ for $\sigma$ values of 1, 5, 10
+```{r fig.height=20, fig.width=10}
+#
+#setting to a 3x1
+par(mfrow = c(3,1))
+
+#simulation study with sigma = 1, normal distibution
+hist(sim1$beta_hat_1, prob = TRUE, breaks = 20,
+     xlab = expression(hat(beta)[1]), 
+     main = expression("Histogram for" ~ hat(beta)[1]  ~ "for" ~ sigma ~ "= 1") , border = "dodgerblue", cex = 1.5)
+
+curve(dnorm(x, mean = beta_1, sd = sqrt(sigma_1 ^ 2 * C[1 + 1, 1 + 1])),
+      col = "darkorange", add = TRUE, lwd = 3)
+
+legend("topright", "True Distribution", lty = c(1, 2), lwd = 2, col = "darkorange")
+
+
+#simulation study with sigma = 5, normal distibution
+hist(sim2$beta_hat_1, prob = TRUE, breaks = 20,
+     xlab = expression(hat(beta)[1]), 
+     main = expression("Histogram for" ~ hat(beta)[1]  ~ "for" ~ sigma ~ "= 5") , border = "dodgerblue", cex = 1.5)
+
+curve(dnorm(x, mean = beta_1, sd = sqrt(sigma_2 ^ 2 * C[1 + 1, 1 + 1])),
+      col = "darkorange", add = TRUE, lwd = 3)
+
+legend("topright", "True Distribution", lty = c(1, 2), lwd = 2, col = "darkorange")
+
+
+#simulation study with sigma = 10, normal distibution
+hist(sim3$beta_hat_1, prob = TRUE, breaks = 20,
+     xlab = expression(hat(beta)[1]), 
+     main = expression("Histogram for" ~ hat(beta)[1]  ~ "for" ~ sigma ~ "= 10") , border = "dodgerblue", cex = 1.5)
+
+curve(dnorm(x, mean = beta_1, sd = sqrt(sigma_3 ^ 2 * C[1 + 1, 1 + 1])),
+      col = "darkorange", add = TRUE, lwd = 3)
+
+legend("topright", "True Distribution", lty = c(1, 2), lwd = 2, col = "darkorange")
+```
+
+####1.3.1.4 Plot of true normal distribution of $\hat{\beta_1}$
+```{r}
+# plot curve for true normal distributions of beta_1_hat
+x = seq(-4, 6, length = 100)
+plot(x, dnorm(x, mean = 1, sd = sqrt(sigma_1 ^ 2 * C[1 + 1, 1 + 1])), type = "l", lty = 1, lwd = 2,
+     xlab = expression(hat(beta)[1]), ylab = "Density",
+     main = expression("True normal distribution of " ~ hat(beta)[1] ~ "for" ~ sigma ~ "values"), col = "darkorange")
+
+curve(dnorm(x, mean = beta_1, sd = sqrt(sigma_2 ^ 2 * C[1 + 1, 1 + 1])),
+      col = "dodgerblue", add = TRUE, lwd = 3)
+
+curve(dnorm(x, mean = beta_1, sd = sqrt(sigma_3 ^ 2 * C[1 + 1, 1 + 1])),
+      col = "red", add = TRUE, lwd = 3)
+
+legend("topright", c(expression(sigma ~ " = 1"), expression(sigma ~ " = 5"), expression(sigma ~ " = 10")), lty = c(1,1,1), lwd = 2,
+       col = c("darkorange", "dodgerblue", "red"), adj = c(0.2, 0.6), cex=0.75)
+```
+
+
+```{r}
+#please not that for the given x0, in code I am useing xoo to differentiate this value from the x0 found in the X matrix
+#as with y_hat_xo as well
+
+C = solve(t(X) %*% X)
+C
+xoo = c(1, -3, 2.5, .5, 0)
+
+#comparing means
+true_mean      = c(2,2, 2)
+empirical_mean = c(mean(sim1$y_hat_xo),      mean(sim2$y_hat_xo),      mean(sim3$y_hat_xo))
+
+true_variance  = c((sigma_1 ^2 * ( t(xoo) %*% C %*% xoo )), sigma_2 ^ 2 * ( t(xoo) %*% C %*% xoo ), sigma_3 ^ 2 * ( t(xoo) %*% C %*% xoo ))
+empirical_var  = c(var(sim1$y_hat_xo),       var(sim2$y_hat_xo),       var(sim3$y_hat_xo))
+
+true_sd  = c((sigma_1 * sqrt( t(xoo) %*% C %*% xoo )), sigma_2 * sqrt( t(xoo) %*% C %*% xoo ), sigma_3 * sqrt( t(xoo) %*% C %*% xoo ))
+empirical_sd  = c(sd(sim1$y_hat_xo),       sd(sim2$y_hat_xo),       sd(sim3$y_hat_xo))
+
+results = data.frame(simulations, study_1_sigmas, true_mean, empirical_mean, true_variance, empirical_var, true_sd, empirical_sd)
+colnames(results) = c("Simulation Set", "Sigma Value", "True Mean", "Empirical Mean", "True Variance", "Empirical Variance", "True SD", "Empirical SD" )
+```
+
+####1.3.2.1 Table for analysis $\hat{E}[y(x_o)]$
+```{r}
+knitr::kable(results, caption = "Analysis for True and Empirical Values")
+```
+
+
+
+
+####1.3.2.2 Examine Distribution of 1.2.1 $\hat{E}[y(x_o)]$
+```{r}
+prob = rep(0, 3)
+get_prob_y_hat_xo = function(sigma, y_hat_xo){
+  sd_bh1 = as.vector(sigma * sqrt( t(xoo) %*% C %*% xoo ))
+  prob[1] = mean(2 - 1 * sd_bh1 < y_hat_xo & y_hat_xo < 2 + 1 * sd_bh1)
+  prob[2] = mean(2 - 2 * sd_bh1 < y_hat_xo & y_hat_xo < 2 + 2 * sd_bh1)
+  prob[3] = mean(2 - 3 * sd_bh1 < y_hat_xo & y_hat_xo < 2 + 3 * sd_bh1)
+  prob
+}
+# We expect these to be: 0.68, 0.95, 0.997 since beta_hat_1 follows a normal distribution
+#Get Probability for simulation 1
+get_prob_y_hat_xo(sigma_1, sim1$y_hat_xo)
+get_prob_y_hat_xo(sigma_2, sim2$y_hat_xo)
+get_prob_y_hat_xo(sigma_3, sim3$y_hat_xo)
+```
+
+####1.3.2.3 Examine Histogram for $\hat{E}[y(x_o)]$
+```{r fig.height=20, fig.width=10}
+#setting to a 3x1
+par(mfrow = c(3,1))
+hist(sim1$y_hat_xo, prob = TRUE, breaks = 20,
+     xlab = expression(hat(E) ~ "[Y|" ~ x[1] ~ "= -3," ~ x[2] ~" = 2.5," ~ x[3] ~" = 0.5," ~ x[4] ~ "= 0]"), main = expression("Histogram for" ~ hat(E) ~ "[Y] when " ~ sigma ~ " = 1"), border = "dodgerblue",  ylim = c(0, .2), cex = 1.5)
+                
+curve(dnorm(x, mean = 2, sd = sigma_1 * sqrt( t(xo) %*% C %*% xo)),
+      col = "darkorange", add = TRUE, lwd = 3)
+
+legend("topright", "True Distribution", lty = c(1, 2), lwd = 2, col = "darkorange")
+
+#simulation 2
+hist(sim2$y_hat_xo, prob = TRUE, breaks = 20,
+     xlab = expression(hat(E) ~ "[Y|" ~ x[1] ~ "= -3," ~ x[2] ~" = 2.5," ~ x[3] ~" = 0.5," ~ x[4] ~ "= 0]"), main = expression("Histogram for" ~ hat(E) ~ "[Y] when " ~ sigma ~ " = 5"), border = "dodgerblue",  ylim = c(0, .04), cex = 1.5)
+
+curve(dnorm(x, mean = 2, sd = sigma_2 * sqrt( t(xo) %*% C %*% xo)),
+      col = "darkorange", add = TRUE, lwd = 3)
+
+legend("topright", "True Distribution", lty = c(1, 2), lwd = 2, col = "darkorange")
+
+#simulation 3
+hist(sim3$y_hat_xo, prob = TRUE, breaks = 20,
+     xlab = expression(hat(E) ~ "[Y|" ~ x[1] ~ "= -3," ~ x[2] ~" = 2.5," ~ x[3] ~" = 0.5," ~ x[4] ~ "= 0]"), main = expression("Histogram for" ~ hat(E) ~ "[Y] when " ~ sigma ~ " = 10"), border = "dodgerblue",  ylim = c(0, .02), cex = 1.5)
+
+curve(dnorm(x, mean = 2, sd = sigma_3 * sqrt( t(xo) %*% C %*% xo)),
+      col = "darkorange", add = TRUE, lwd = 3)
+
+legend("topright", "True Distribution", lty = c(1, 2), lwd = 2, col = "darkorange")
+```
+
+
+```{r}
+factor1 = (n-p)/sigma_1 ^ 2
+factor2 = (n-p)/sigma_2 ^ 2
+factor3 = (n-p)/sigma_3 ^ 2
+
+true_mean      = c(10,10, 10)
+empirical_mean = c(mean(sim1$se_squared * factor1), mean(sim2$se_squared * factor2), mean(sim3$se_squared * factor3))
+
+true_variance  = c(20, 20, 20)
+empirical_var  = c(var(sim1$se_squared * factor1),var(sim2$se_squared * factor2), var(sim3$se_squared * factor3))
+
+results = data.frame(simulations, study_1_sigmas, true_mean, empirical_mean, true_variance, empirical_var)
+colnames(results) = c("Simulation Set", "Sigma Value", "True Mean", "Empirical Mean", "True Variance", "Empirical Variance" )
+```
+
+####1.3.3.1 Table for analysis $s_e^2$
+```{r}
+knitr::kable(results, caption = "Analysis for True and Empirical Values $s_e^2$")
+```
+
+####1.3.3.2 Examine Distribution for $s_e^2$
+We can expect the probability for a value following a Chi-Square distribution to line up well to the mean value of simulations that are under that specific value as shown below
+
+```{r}
+#looking at probabilities
+c(mean(sim1$se_squared * factor1 < 3), mean(sim2$se_squared * factor2 < 3), mean(sim3$se_squared * factor3 < 3))
+pchisq(3, df = 10)
+```
+
+####1.3.3.3 Examine Histogram for $s_e^2$
+```{r fig.height=20, fig.width=10}
+#setting to a 3x1
+par(mfrow = c(3,1))
+#simulation 1
+hist(((n-p) * sim1$se_squared)/(sigma_1^2), prob = TRUE, breaks = 20,
+     xlab = mtext((expression( over((n-p) * se ^ 2, sigma ^ 2))), side=1, line=4), main = expression("Histogram for" ~ over((n-p) * se ^ 2, sigma ^ 2 ) ~ "where n = 15, p = 5," ~ sigma ~ "= 1"), border = "dodgerblue") #, cex = 1.5)
+
+curve(dchisq(x, df = 10),
+      col = "darkorange", add = TRUE, lwd = 3)
+legend("topright", "True Distribution", lty = c(1, 2), lwd = 2, col = "darkorange")
+
+#simulation 2
+hist(((n-p) * sim2$se_squared)/(sigma_2^2), prob = TRUE, breaks = 20,
+     xlab = mtext((expression( over((n-p) * se ^ 2, sigma ^ 2))), side=1, line=4), main = expression("Histogram for" ~ over((n-p) * se ^ 2, sigma ^ 2 ) ~ "where n = 15, p = 5," ~ sigma ~ "= 5"), border = "dodgerblue") #, cex = 1.5)
+
+curve(dchisq(x, df = 10),
+      col = "darkorange", add = TRUE, lwd = 3)
+legend("topright", "True Distribution", lty = c(1, 2), lwd = 2, col = "darkorange")
+
+#simulation 3
+hist(((n-p) * sim3$se_squared)/(sigma_3^2), prob = TRUE, breaks = 20,
+     xlab = mtext((expression( over((n-p) * se ^ 2, sigma ^ 2))), side=1, line=4), main = expression("Histogram for" ~ over((n-p) * se ^ 2, sigma ^ 2 ) ~ "where n = 15, p = 5," ~ sigma ~ "= 10"), border = "dodgerblue") #, cex = 1.5)
+
+curve(dchisq(x, df = 10),
+      col = "darkorange", add = TRUE, lwd = 3)
+legend("topright", "True Distribution", lty = c(1, 2), lwd = 2, col = "darkorange")
+```
+
+###1.4 Discussion
+
+####Discussion of  $\hat{\beta}_1$
+
+For the discussion we will first examine $\hat{\beta}_1$.  The following information will lead to understanding the true distribution for $\hat{\beta}_1$ has been determined to be:
+
+$\hat{\beta}_1 \sim N(\beta_1, \sigma^2  C_{22}) = N(1, \sigma^2 * 0.02858036)$
+where
+$C = \left(X^\top X\right)^{-1}$
+
+**Examining Empirical Mean vs Expected value for $\beta_1$**
+
+To determine this, please refer to the table [1.3.1.1 Table for analysis of $\hat{\beta}_1$] in the results section which shows for each of the values of sigma, over 3000 simulations, the empirical mean is very close to the true mean. (Note that as the value of **sigma** increases, the difference between the true mean and the empirical mean increases).  The empirical mean was calculated by taking the mean of the beta_hat_1 values that were calculated, in a normal distribution we know E[$\hat{\beta_1}$] = $\beta_1$, so this is evidence towards this following a normal distribution.
+
+**Examining Empical Variance vs Variance expected from the normal distribution for $\beta_1$**
+
+Not only is the mean of the simulated values for each value of sigma very close to the true value of $\beta_1$ (as expected), but the empirical variance is very close to the variance associated with a normal distribution for a multiple linear regression.  In an MLR (multiple linear regression) model, the variance of $\hat{\beta_1}$ is $\sigma^2 * C_{jj}$, given we are looking at $\hat{\beta_1}$, that would mean looking at $C_{22}$, which is equal to 0.02858036.  As the table [1.3.1.1 Table for analysis of $\hat{\beta}_1$] shows, the values for the empirical variance of $\hat{\beta_1}$ are very close to the true variance of $\beta_1$.
+
+**Examining Probabilities following a normal distribution for $\beta_1$**
+
+After examining the mean and variance, looking at section [1.3.1.2 Examine Distribution of $\hat{\beta}_1$], you can see the calculated proportion of sample means within 1, 2, and 3 standard deviations.  These values were expected to be close to 0.68, 0.95, and 0.997.  For each of the values of $\sigma$, this was true, thus showing that the true distribution fo the estimate $\hat{\beta}_1$  follows a normal distribution.
+
+**Plotting the sample distributions along with the expected normal distribution for $\beta_1$**
+Then in plotting the sample shown in section [1.3.1.3 Histogram for $\hat{\beta}_1$ for $\sigma$ values of 1, 5, 10], we can see that the distribution of the simulated values does appear to follow a normal distribution.  Through this information we can make the claim that the true distribution of $\hat{\beta}_1$ is:
+
+$\hat{\beta}_1 \sim N(\beta_1, \sigma^2  C_{22}) = N(1, \sigma^2 * 0.02858036)$
+
+**Changes in the distribution with different values of $\sigma$ for $\beta_1$**
+
+In the normal distribution, $\sigma$ will impact the variance associated with the distribution.  An increase in $\sigma$ will increase the variance, this is shown the in the plot [1.3.1.4 Plot of true normal distribution of $\hat{\beta_1}$]
+
+####Discussion of $\hat{\text{E}}[Y \mid x_1 = -3, x_2 = 2.5, x_3 = 0.5, x_4 = 0]$
+
+The following information will lead to an understanding that the true distribution for $\hat{\text{E}}[Y \mid x_1 = -3, x_2 = 2.5, x_3 = 0.5, x_4 = 0]$ has been determined to be:
+
+$\hat{\text{E}}[Y \mid x_1 = -3, x_2 = 2.5, x_3 = 0.5, x_4 = 0] \sim N(\hat{y}(x_o), \sigma^2 * x_o^\top \left(X^\top X\right)^{-1} x_o)$
+
+
+$\hat{\text{E}}[Y \mid x_1 = -3, x_2 = 2.5, x_3 = 0.5, x_4 = 0] \sim N(2, \sigma^2 * 4.154206)$
+
+
+**Examining Empirical Mean vs Expected value for $\hat{\text{E}}[Y \mid x_1 = -3, x_2 = 2.5, x_3 = 0.5, x_4 = 0]$.**
+
+To determine this please refer to the table [1.3.2.1 Table for analysis $\hat{E}[y(x_o)]$] in the results section which shows for each of the values of sigma, over 3000 simulations, the empirical mean is very close to the true mean.  (Note that as the value of $\sigma$ increases, the difference between the true mean and the empirical mean increases).  The empirical mean was calculated by taking the mean of the y_hat_xo values that were calculated during the simulations, in a normal distribution we know that E[$\hat{\text{E}}[Y \mid x_1 = -3, x_2 = 2.5, x_3 = 0.5, x_4 = 0]$] = $\beta_0 + \beta_1 (-3) + \beta_2 (2.5) + \beta_3(0.5)  + \beta_4 (0)$ = $2 + (-3) +  (2.5) + (0.5)  + (0)$ = 2, so this is evidence towards following a normal distribution.
+
+**Examining Empical Variance vs Variance expected from the normal distribution**
+
+Not only is the mean of the simulated values for each of the sigma values very close to the true value (as expected), but the empirical variance is very close to the variance associated with the normal distribution.  Please look at the table [1.3.2.1 Table for analysis $\hat{E}[y(x_o)]$] to see the true variance is very close to the empirical variance.  
+
+
+Note that the $Var[\hat{y}(x_o)]$ = $\sigma ^ 2 * x_o^\top \left(X^\top X\right)^{-1} x_o$ which has been calculated in table [1.3.2.1 Table for analysis $\hat{E}[y(x_o)]$] showing very close values.  
+
+**Examining Probabilities following a normal distribution**
+
+As section [1.3.2.2 Examine Distribution of 1.2.1 $\hat{E}[y(x_o)]$] shows, the probabilies are following a normal distribution as expected, for standard deviations of 1, 2 and 3 are very close to 0.68, 0.95, and 0.997.
+
+**Plotting Historgram of of $\hat{E}[y(x_o)]$**
+
+Plotting the results of the simulations for $\hat{\text{E}}[Y \mid x_1 = -3, x_2 = 2.5, x_3 = 0.5, x_4 = 0]$ with the normal distribution shown in section [1.3.2.3 Examine Histogram for $\hat{E}[y(x_o)]$] is further evidence that this does in fact follow a normal distribution of:
+
+$\hat{\text{E}}[Y \mid x_1 = -3, x_2 = 2.5, x_3 = 0.5, x_4 = 0] \sim N(2, \sigma^2 * 4.154206)$
+
+Again, as the value of $\sigma$ increases, the variance found in the distribution increases.
+
+####Discussion of  $s_e^2$
+The following information will lead to an understanding that $s_e^2$ mulitipled by a factor of $\frac{n-p}{\sigma^2}$ follows a Chi-Squared distribution with n-p degrees of freedom where n = 15 due to the sample size, and p = 5 due to the number of $\beta$ parameters in the model.
+
+$$\frac{s_e^2 * (n - p)}{\sigma^ 2} \sim \chi_{n-p}^2$$
+$$\frac{s_e^2 * (10)}{\sigma^ 2} \sim \chi_{10}^2$$ 
+**Examining Empirical Mean vs Expected value for $s_e^2$**
+As shown in the table [1.3.3.1 Table for analysis $s_e^2$] the true mean of a $\chi_{10}^2$ is 10 (for the degrees of freedom), and the empirical mean for the simulation sets with $\sigma \in (1,5,10)$ when multipled by a factor of $\frac{n-p}{\sigma ^ 2}$ is very close to the true mean.  This is evidence toward $s_e^2$ following a Chi-Squared distribution with n-p degrees of freedom where n = sample size = 15, and p = number of $\beta$ parameters which is 5.
+
+**Examining Empical Variance vs Variance expected from the normal distribution for $s_e^2$**
+As shown in table [1.3.3.1 Table for analysis $s_e^2$] the true variance for a $\chi_{10}^2$ is 20 (2 * the degrees of freedom), and the empirical variance for the simulation sets with $\sigma \in (1,5,10)$ when multiplied by a factor of $\frac{n-p}{\sigma ^ 2}$ is very close to the true variance.  This again is evidence toward $s_e^2$ following a Chi-Squared distribution with n-p degrees of freedom where n = sample size = 15, and p = number of $\beta$ parameters which is 5.
+
+**Examining Probabilities following a normal distribution for $s_e^2$**
+In section [1.3.3.2 Examine Distribution for $s_e^2$] we can see that the mean of the simulated values multipled by a factor of $\frac{n-p}{\sigma ^ 2}$ comes very close to the probability assocated with a chi-squared distribution with n-p (10) degress of freedom.  Given these values are so close, this again is evidence toward $s_e^2$ following a Chi-Squared distribution with n-p degrees of freedom where n = sample size = 15, and p = number of $\beta$ parameters which is 5.
+
+**Plotting the sample distributions along with the expected normal distribution for $s_e^2$**
+In section [1.3.3.3 Examine Histogram for $s_e^2$] we can see th historgrams for the values of $s_e^2$ multipled by their factor of: $\frac{n-p}{\sigma ^ 2}$ follow the distribution of a Chi-Squared distribution with n-p (10) degrees of freedom for each of the values of $\sigma$
+
+**Changes in the distribution with different values of $\sigma$**
+Based on the simulated data, the values of $\sigma$ do not appear to impact the distribution, other than the factor required to ensure that the chi-squared distribution is followed.
+
+
+##2.0 Simulation Study 2
+
+###2.1 Introduction
+The intent of this simulation study is to explore how well the TEST RMSE will select the correct model through simulation.  During this simulation study a dataset will be randomly split the data into 2 sets of data (300 observations for training, 300 observations for testing),  between a train dataset and a test dataset evenly over 500 simulations.  The dataset used for this simulation comes from data stored in [`study_2.csv](study_2.csv) which contains values of the 9 predictors with a sample size of 600.  
+
+During each of the 500 simulations, a total of 9 models will be fit, and the Train and Test RMSE will be calculated for 3 different values of $\sigma \in (1,2, 4)$  We would expect to see the Train datasets RMSE decrease as the number of predictors increases, and we would expect to see the lowest RMSE for the true model:
+
+$$Y_i = \beta_0 + \beta_1 x_{i1} + \beta_2 x_{i2} + \beta_3 x_{i3} + \beta_4 x_{i4} + \beta_5 x_{i5} + \epsilon_i$$
+where $\epsilon_i \sim N(0, \sigma^2)$ and
+
+- $\beta_0$ = 0
+- $\beta_1$ = 6
+- $\beta_2$ = -3.5
+- $\beta_3$ = 1.7
+- $\beta_4$ = -1.1
+- $\beta_5$ = 0.7
+
+The nine models to be fit are:
+
+- `y ~ x1`
+- `y ~ x1 + x2`
+- `y ~ x1 + x2 + x3`
+- `y ~ x1 + x2 + x3 + x4`
+- **`y ~ x1 + x2 + x3 + x4 + x5`**, the correct form of the model
+- `y ~ x1 + x2 + x3 + x4 + x5 + x6`
+- `y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7`
+- `y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + x8`
+- `y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + x8 + x9`
+
+
+For each of the models above, during each 500 simulations, the Train and Test RMSE values are calculated for the 3 values of $\sigma$.
+
+
+$$\text{RMSE}(\text{model, data}) = \sqrt{\frac{1}{n} \sum_{i = 1}^{n}(y_i - \hat{y}_i)^2}$$
+
+###2.2 Methods
+
+```{r}
+#set seed
+birthday = 19810803
+set.seed(birthday)
+
+#set known model parameters
+beta_0 = 0
+beta_1 = 6
+beta_2 = -3.5
+beta_3 = 1.7
+beta_4 = -1.1
+beta_5 = 0.7
+#set values of sigma for each simulation
+sigma_1 = 1
+sigma_2 = 2
+sigma_3 = 4
+
+num_sims = 500
+sample_size_split = 300
+sample_size_total = 600
+
+library(readr)
+study_2 = read_csv("study_2.csv")
+
+x0 = rep(1, sample_size_total)
+x1 = study_2$x1
+x2 = study_2$x2
+x3 = study_2$x3
+x4 = study_2$x4
+x5 = study_2$x5
+x6 = study_2$x6
+x7 = study_2$x7
+x8 = study_2$x8
+x9 = study_2$x9
+y = rep(0, sample_size_total)
+
+
+sim_data = data.frame(x1, x2, x3, x4, x5,x6, x7, x8, x9,  y)
+
+get_predict = function(model, test_data){
+  test_data$y - predict(model, newdata = test_data)
+}
+
+get_RMSE= function(data) {
+  RMSE   = sqrt( mean(data ^ 2  ))
+}
+
+simulate2 = function(num_sims, sigma){
+  RMSE_train   = matrix(0, nrow = num_sims, ncol = 9)
+  RMSE_test    =  matrix(0, nrow = num_sims, ncol = 9)
+  winner_test  = rep(0, num_sims)
+  winner_train = rep(0, num_sims)
+  
+  for(i in 1:num_sims) {
+      
+    eps = rnorm(sample_size_total, mean = 0 , sd = sigma)
+    
+    sim_data$y = beta_0 * x0 + beta_1 * x1 + beta_2 * x2 + beta_3 * x3 + beta_4 * x4 + beta_5 * x5 +   eps
+    
+    train_index = sample(1:nrow(sim_data), sample_size_split)
+    train = sim_data[train_index ,]
+    test  = sim_data[-train_index ,]
+    
+    model_1 = lm( y ~ x1, data = train)
+    model_2 = lm( y ~ x1 + x2, data = train)
+    model_3 = lm( y ~ x1 + x2 + x3, data = train)
+    model_4 = lm( y ~ x1 + x2 + x3 + x4, data = train)
+    model_5 = lm( y ~ x1 + x2 + x3 + x4 + x5, data = train)
+    model_6 = lm( y ~ x1 + x2 + x3 + x4 + x5 + x6, data = train)
+    model_7 = lm( y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7, data = train)
+    model_8 = lm( y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + x8, data = train)
+    model_9 = lm( y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + x8 + x9, data = train)
+    
+    RMSE_train[i ,] = c(get_RMSE(resid(model_1)), get_RMSE(resid(model_2)), get_RMSE(resid(model_3)), get_RMSE(resid(model_4)),
+                      get_RMSE(resid(model_5)), get_RMSE(resid(model_6)), get_RMSE(resid(model_7)), get_RMSE(resid(model_8)),
+                      get_RMSE(resid(model_9))
+                      )
+
+    RMSE_test[i, ] = c(get_RMSE(get_predict(model_1, test)), get_RMSE(get_predict(model_2, test)), 
+                       get_RMSE(get_predict(model_3, test)), get_RMSE(get_predict(model_4, test)), 
+                       get_RMSE(get_predict(model_5, test)), get_RMSE(get_predict(model_6, test)), 
+                       get_RMSE(get_predict(model_7, test)), get_RMSE(get_predict(model_8, test)), 
+                       get_RMSE(get_predict(model_9, test))
+                       )
+    winner_test[i] = which.min(RMSE_test[i, ])
+    winner_train[i] = which.min(RMSE_train[i, ])
+    
+  }
+  result = data.frame(RMSE_train, RMSE_test, winner_test, winner_train) 
+  colnames(result) <- c( "TrainRMSE_M1", "TrainRMSE_M2", "TrainRMSE_M3", "TrainRMSE_M4", "TrainRMSE_M5", "TrainRMSE_M6", 
+                         "TrainRMSE_M7", "TrainRMSE_M8", "TrainRMSE_M9", 
+                         "TestRMSE_M1",  "TestRMSE_M2",  "TestRMSE_M3",  "TestRMSE_M4", "TestRMSE_M5", "TestRMSE_M6", "TestRMSE_M7", 
+                         "TestRMSE_M8",  "TestRMSE_M9",  "TestWinner",   "TrainWinner")
+  result
+}
+
+#run simulations 500 times for values of sigma: 1, 2, 4
+sim1_sigma1 = simulate2(500, 1)
+sim2_sigma2 = simulate2(500, 2)
+sim3_sigma3 = simulate2(500, 4)
+```
+
+###2.3 Results
+
+####2.3.1 Function used by tables to determine lowest RMSE
+
+```{r}
+#Summerizing the results into a tables for each value of sigma
+num_models  = 9
+WinnerTest  = rep(0, 9)
+WinnerTrain = rep(0, 9)
+summarize_winners = function(data){
+  for(i in 1: num_models){
+    WinnerTest[i] = nrow(data[(data$TestWinner == i), ])
+    WinnerTrain[i] = nrow(data[(data$TrainWinner == i), ])
+  }
+  predictorVariables = rep(1:9)
+  result = data.frame(predictorVariables, WinnerTest, WinnerTrain)
+  colnames(result) = c("Model Selected", "Num of Sims Model Selected base on Lowest Test RMSE", "Num of Sims Model Selected based on Lowest Train RMSE")
+  result
+}
+
+```
+
+####2.3.2 Table of Model Selected based on lowest RMSE for $\sigma$ = 1
+```{r}
+knitr::kable(summarize_winners(sim1_sigma1), caption = "Model Winner Based on Lowest RMSE Value for $\\sigma$ = 1" )
+```
+
+####2.3.3 Table of Model Selected based on lowest RMSE for $\sigma$ = 2
+```{r}
+knitr::kable(summarize_winners(sim2_sigma2), caption = "Model Winner Based on Lowest RMSE Value for $\\sigma$ = 2" )
+```
+
+####2.3.4 Table of Model Selected based on lowest RMSE for $\sigma$ = 4
+```{r}
+knitr::kable(summarize_winners(sim3_sigma3), caption = "Model Winner Based on Lowest RMSE Value for $\\sigma$ = 4")
+```
+
+
+####2.3.5 Histograms for Model Selected based on lowest test RMSE for $\sigma \in (1,2,4)$
+```{r fig.height=20, fig.width=10}
+#setting to a 3x1
+par(mfrow = c(3,1))
+
+hist(sim1_sigma1$TestWinner,
+     main   = expression("Simulation Model Selected based on Train Data for" ~ sigma ~ "= 1"),
+     xlab   = "Number of predictors in model",
+     col    = "dodgerblue",
+     border = "darkorange", breaks = seq(1, 9))
+
+hist(sim2_sigma2$TestWinner,
+     main   = expression("Simulation Model Selected based on Train Data for" ~ sigma ~ "= 2"),
+     xlab   = "Number of predictors in model",
+     col    = "dodgerblue",
+     border = "darkorange", breaks = seq(1, 9))
+
+hist(sim3_sigma3$TestWinner,
+     main   = expression("Simulation Model Selected based on Train Data for" ~ sigma ~ "= 4"),
+     xlab   = "Number of predictors in model",
+     col    = "dodgerblue",
+     border = "darkorange", breaks = seq(1, 9))
+```
+
+####2.3.6 Plot of average train RMSE and average Test RMSE change as a fuction of model size
+
+```{r fig.height=20, fig.width=10}
+#summerizing data to get the means
+get_means = function(data){
+  end = ncol(data) -2
+  model_means = rep(0, end)
+  for(i in 1:end) {
+    model_means[i] = mean(data[, i])
+  }
+  model_means
+}
+
+sim1_means = get_means(sim1_sigma1)
+sim2_means = get_means(sim2_sigma2)
+sim3_means = get_means(sim3_sigma3)
+
+par(mfrow = c(3,1))
+#plot for sigma = 1 RMSE Mean 
+plot(sim1_means[1:9], pch = 20, col = "dodgerblue", cex = 1,
+     xlab = "Model Size, f(model size)",
+     ylab = "RMSE",
+     main = expression("Mean RMSE changes as a function of model size" ~ sigma ~ "= 1"))
+points(sim1_means[10:18], pch = 20, col = "darkorange", cex = 1)
+
+lines(sim1_means[10:18], col = "darkorange")
+lines(sim1_means[1:9],   col = "dodgerblue")
+
+legend("topright", c("Train RMSE", "Test RMSE"), lty = c(1,1,1), lwd = 2,
+       col = c("dodgerblue", "darkorange"), adj = c(0.2, 0.6), cex=0.75)
+
+
+#plot for sigma = 2 RMSE Mean 
+plot(sim2_means[1:9], pch = 20, col = "dodgerblue", cex = 1,
+     xlab = "Model Size, f(model size)",
+     ylab = "RMSE",
+     main = expression("Mean RMSE changes as a function of model size" ~ sigma ~ "= 2"))
+points(sim2_means[10:18], pch = 20, col = "darkorange", cex = 1)
+
+lines(sim2_means[10:18], col = "darkorange")
+lines(sim2_means[1:9],   col = "dodgerblue")
+
+legend("topright", c("Train RMSE", "Test RMSE"), lty = c(1,1,1), lwd = 2,
+       col = c("dodgerblue", "darkorange"), adj = c(0.2, 0.6), cex=0.75)
+
+#sigma = 4
+#plot for sigma = 1 RMSE Mean 
+plot(sim3_means[1:9], pch = 20, col = "dodgerblue", cex = 1,
+     xlab = "Model Size, f(model size)",
+     ylab = "RMSE",
+     main = expression("Mean RMSE changes as a function of model size" ~ sigma ~ "= 4"))
+points(sim1_means[10:18], pch = 20, col = "darkorange", cex = 1)
+
+lines(sim3_means[10:18], col = "darkorange")
+lines(sim3_means[1:9],   col = "dodgerblue")
+
+legend("topright", c("Train RMSE", "Test RMSE"), lty = c(1,1,1), lwd = 2,
+       col = c("dodgerblue", "darkorange"), adj = c(0.2, 0.6), cex=0.75)
+
+```
+
+###2.4 Discussion
+
+During each simulation, the model with the lowest RMSE for train and test was noted in the following tables:
+
+- [2.3.2 Table of Model Selected based on lowest RMSE for $\sigma$ = 1]
+- [2.3.3 Table of Model Selected based on lowest RMSE for $\sigma$ = 2]
+- [2.3.4 Table of Model Selected based on lowest RMSE for $\sigma$ = 4]
+
+
+This method will **not** always select the correct model.  When $\sigma$ = 1, Model 5 was correctly selected by the Test RMSE as expected.  When $\sigma$ = 2, again the majority of the time model 5 was selected, but we can see as the value of $\sigma$ increased, our ability to select the correct model decreased.  This is clearly shown in the histogram in section [2.3.5 Histograms for Model Selected based on lowest RMSE for $\sigma \in (1,2,4)], finally as $\sigma$ was increased to a value of 4, we no longer selected the correct model based on the lowest test RMSE.
+
+As expected, and shown in tables, the model with the largest number of predictors will have the lowest RMSE for the test data, this was the case for all values of $\sigma$.  An interesting observation is that as $\sigma$ increases, our ability to select the correct model through RMSE training data decreases - said another way - when variance is increased our ability to select the correct model decreases.
+
+Given the training RMSE will always select the model with the highest number of predictors, you can find a histogram showing the models selected using **test** data for each value of $\sigma in (1, 2, 4)$ in section [2.2.1 Histograms for Model Selected based on lowest RMSE for $\sigma \in (1,2,4)] which present this data in a graphical form.
+
+As shown in the charts in section [2.3.6 Plot of average train RMSE and average Test RMSE change as a fuction of model size], when the model size is low, we have a high RMSE for both train and test.  For the train we see as expected the RMSE conintues to decrease as the number of predictors increases.  This chart also chapter that for the test RMSE there will be a dip in the RMSE and after that point, even though the number of predictors is increasing, the RMSE of the test data will actually increase, thus showing the importance of breaking data up into a test subset and train subset in an effort to select the correct model which will be impacted greatly based on the value of $\sigma$
+
+##3.0 Simulation Study 3
+
+###3.1 Introduction
+
+This simulation is designed to investigate the **power** of the significance of regression test for a simple linear regression.  
+
+$$H_0: \beta_{1} = 0 \ \text{vs} \ H_1: \beta_{1} \neq 0$$
+
+During this simulation, we have different **significance levels** $\alpha \in (0.01, 0.05, 0.10)$ where $\alpha$ is defined to be the probability of a Type 1 Error.  
+
+$$\alpha = P[\text{Reject } H_0 \mid H_0 \text{ True}] = P[\text{Type I Error}]$$
+There is also a parameter $\beta$, which is used to represent the probability of a Type II error (this is not a regression parameter)
+
+$$\beta = P[\text{Fail to Reject } H_0 \mid H_1 \text{ True}] = P[\text{Type II Error}]$$
+**Power** is the probability that a signal of a particular strength will be detected.  Many factors affect the power of a test.  This study will explore signal strength $\beta_1$, noise level $\sigma$, and significance level $\alpha$.
+
+This simulation study will simulate the model:
+
+$$Y_i = \beta_0 + \beta_1 x_i + \epsilon_i$$
+
+where $\epsilon_i \sim N(0, \sigma^2)$
+
+We are letting $\beta_0$ = 0 so that the signal portion will be controlled by $\beta_1$
+
+In this simulation study we will use the following:
+
+- $\beta_1 \in (0, 0.1, 0.2, 0.3, \ldots 3)$
+- $\sigma \in (1,2,4)$
+- $\alpha \in (0.01, 0.05, 0.10)$
+
+For defined x values 
+```{r}
+x_values = seq(0, 5, length = 25)
+```
+
+For each $\beta_1$ value and $\sigma$ combination, we simulate from the true model at 5000 times.  Each time the significance of regression test will be performed to estimate the power with the simulations for a value of $\alpha$ we will use the fomula:
+
+$$\hat{\text{Power}} = \hat{P}[\text{Reject } H_0 \mid H_1 \text{ True}] = \frac{\text{# Tests Rejected}}{\text{# Simulations}}$$
+
+Taking a step back, we can say that for a $\beta_1$ value that is 0, that means there is **NO** linear relationship.  This would mean that in reality that $H_0: \beta_{1} = 0$ is true.  In this case, we would expect to mostly **fail to reject** $H_0$ given there actually is no linear relationship.  We should expect to see that we will reject $H_0$ $\alpha$ of the time, so in the case of $\beta_1$ = 0, we would expect to see $\hat{\text{Power}}$ = $\alpha$.  
+
+For our simulations, if we get a value at $\beta_1 = 0$ that is close to the value of $\alpha$ then we can assume the number of simulations run is appropriate.
+
+When $\beta_1$ is not 0, and there is a linear relationship, meaning in reality $H_0$ is false, we expect to see $H_0$ get rejected.
+
+The code in the **methods** section simulates a model, and the calculates the p-value which is returned in a dataframe.  That dataframe and a vector of alpha values are fed into a function which determines for a given p-value and alpha value if $H_0$ should be rejected.  (Again we expect to most fail to reject at $\beta_1$ = 0).  That is then divided by the number of simulations to provide for a given $\alpha$ value, a value for $\hat{\text{Power}}$.
+
+###3.2 Methods
+
+```{r}
+birthday = 19810803
+set.seed(birthday)
+
+num_sims = 1000 # number of simulations
+x_values = seq(0, 5, length = 25)
+n        = length(x_values)   # sample size
+alpha    = c(0.01,0.05,0.10)
+beta_1   = seq(0, 3, .1)
+p_value  = rep(0, length(beta_1))
+
+
+simulate3 = function(num_sim, sigma){
+  p_values = matrix(0, num_sim,  length(beta_1))  
+  for(sim in 1: num_sim){
+    for(i in 1:length(beta_1)) {
+      signal   = x_values * beta_1[i]
+      eps      = rnorm(25, mean= 0, sd = sigma)
+      y        = signal + eps
+      fit      = lm(y ~ x_values)
+      p_value[i] = summary(fit)$coefficients[2,4]
+    }
+    p_values[sim, ]  = p_value
+  }
+  as.data.frame(p_values)
+}
+
+get_power = function(data, alpha){
+  pwr = matrix(0, nrow = length(alpha), ncol = ncol(data))
+  for (j in 1: length(alpha)){
+    rejectHo = rep(0, ncol(data))
+    for (i in 1: ncol(data)){
+      #we should reject Ho when beta > 0
+      rejectHo[i] = sum(data[ , i] < alpha[j])
+    }
+    pwr[ j ,  ] = rejectHo/nrow(data)  
+  }
+  pwr = as.data.frame(pwr)
+  colnames(pwr) = beta_1
+  pwr
+}
+
+#simulate for sigma = 1
+data_sigma1  = simulate3(1000, 1)
+#get power power = #tests rejected/#simulations for a given beta_1 value
+power_sigma1 = get_power(data_sigma1, alpha)
+
+#simulate for sigma = 2
+data_sigma2  = simulate3(1000, 2)
+#get power power = #tests rejected/#simulations for a given beta_1 value
+power_sigma2 = get_power(data_sigma2, alpha)
+
+#simulate for sigma = 4
+data_sigma3  = simulate3(1000, 4)
+#get power power = #tests rejected/#simulations for a given beta_1 value
+power_sigma3 = get_power(data_sigma3, alpha)
+```
+
+###3.3 Results
+
+####3.3.1 Plots of Power for values of $\sigma$
+```{r fig.height=20, fig.width=10}
+#setting to a 3x1
+par(mfrow = c(3,1))
+
+#Sigma = 1
+par(mar = c(5, 5, 2, 2)) # adjusted plot margins, otherwise the "hat" does not display
+
+plot(beta_1, power_sigma1[1, ], pch = 20, col = "dodgerblue", cex = 1,
+     xlab = expression(hat(beta)[1] ~ "values"),
+     ylab = expression(hat(Power)),
+     main = expression(hat(Power) ~ "for " ~ sigma ~ " = 1"))
+
+points(beta_1, power_sigma1[2, ], pch = 20, col = "darkorange", cex = 1)
+
+points(beta_1, power_sigma1[3, ], pch = 20, col = "red", cex = 1)
+
+lines(beta_1, power_sigma1[1, ], col = "dodgerblue")
+
+lines(beta_1, power_sigma1[2, ], col = "darkorange")
+
+lines(beta_1, power_sigma1[3, ], col = "red")
+
+legend("bottomright", c(expression(alpha ~ " = 0.01" ), expression(alpha ~ "= 0.05"), expression(alpha ~ "= 0.10")), lty = 1, lwd = 2,
+       col = c("dodgerblue", "darkorange", "red"), adj = c(0.2, 0.6))
+
+#Sigma = 2
+
+par(mar = c(5, 5, 2, 2)) # adjusted plot margins, otherwise the "hat" does not display
+
+plot(beta_1, power_sigma2[1, ], pch = 20, col = "dodgerblue", cex = 1,
+     xlab = expression(hat(beta)[1] ~ "values"),
+     ylab = expression(hat(Power)),
+     main = expression(hat(Power) ~ "for " ~ sigma ~ " = 2"))
+
+points(beta_1, power_sigma2[2, ], pch = 20, col = "darkorange", cex = 1)
+
+points(beta_1, power_sigma2[3, ], pch = 20, col = "red", cex = 1)
+
+lines(beta_1, power_sigma2[1, ], col = "dodgerblue")
+
+lines(beta_1, power_sigma2[2, ], col = "darkorange")
+
+lines(beta_1, power_sigma2[3, ], col = "red")
+
+legend("bottomright", c(expression(alpha ~ " = 0.01" ), expression(alpha ~ "= 0.05"), expression(alpha ~ "= 0.10")), lty = 1, lwd = 2,
+       col = c("dodgerblue", "darkorange", "red"), adj = c(0.2, 0.6))
+
+#Sigma = 3
+
+par(mar = c(5, 5, 2, 2)) # adjusted plot margins, otherwise the "hat" does not display
+
+plot(beta_1, power_sigma3[1, ], pch = 20, col = "dodgerblue", cex = 1,
+     xlab = expression(hat(beta)[1] ~ "values"),
+     ylab = expression(hat(Power)),
+     main = expression(hat(Power) ~ "for " ~ sigma ~ " = 4"))
+
+points(beta_1, power_sigma3[2, ], pch = 20, col = "darkorange", cex = 1)
+
+points(beta_1, power_sigma3[3, ], pch = 20, col = "red", cex = 1)
+
+lines(beta_1, power_sigma3[1, ], col = "dodgerblue")
+
+lines(beta_1, power_sigma3[2, ], col = "darkorange")
+
+lines(beta_1, power_sigma3[3, ], col = "red")
+
+legend("bottomright", c(expression(alpha ~ " = 0.01" ), expression(alpha ~ "= 0.05"), expression(alpha ~ "= 0.10")), lty = 1, lwd = 2,
+       col = c("dodgerblue", "darkorange", "red"), adj = c(0.2, 0.6))
+```
+
+####3.3.2 Examining Power when $\beta_1$ is 0, which should be close
+```{r}
+#Power Value near at alpha for simulations of 1000
+knitr::kable(data.frame(alpha, power_sigma1$`0`, power_sigma2$`0`, power_sigma3$`0`), caption = "Power Value")
+
+
+#simulate for sigma = 1
+data_sigma1  = simulate3(2000, 1)
+#get power power = #tests rejected/#simulations for a given beta_1 value
+power_sigma1 = get_power(data_sigma1, alpha)
+
+#simulate for sigma = 2
+data_sigma2  = simulate3(2000, 2)
+#get power power = #tests rejected/#simulations for a given beta_1 value
+power_sigma2 = get_power(data_sigma2, alpha)
+
+#simulate for sigma = 4
+data_sigma3  = simulate3(2000, 4)
+#get power power = #tests rejected/#simulations for a given beta_1 value
+power_sigma3 = get_power(data_sigma3, alpha)
+
+#Power Value near at alpha for simulations of 2000
+knitr::kable(data.frame(alpha, power_sigma1$`0`, power_sigma2$`0`, power_sigma3$`0`), caption = "Power Value")
+
+```
+
+
+###3.4 Discussion
+For the discussion it is important to call out that when $\beta_1$ has a value of 0, that means that there is only noise.  This is a different case than when $\beta_1$ has a value, and then there is a sigmal component.  
+
+As $\beta_1$, the signal increases, power increases up to a point.  This makes logical sense, as a signal gets stronger, the noise will have less of an impact, and we can see $H_0$ getting rejected correctly more often.  Once the signal component outweighs the noise component, then $\hat{\text{Power}}$ stabilizes.  This can be clearly seen in the charts in section [3.3.1 Plots of Power for values of $\sigma$].  We can see in the charts that as the value of $\beta_1$ increases, the power value increase, the slope of the line also shows that for lower values of $\beta_1$ the impact of increasing $\beta_1$ is greater, and as $\hat{\text{Power}}$ approaches 1, the slope decreases, meaning the impact on power of $\beta_1$ decreases as $\hat{\text{Power}}$ approaches a value of 1.
+
+As $\alpha$ increases, power increases up to a certain point.  This also makes sense given our simulation. 
+
+Generically - the lower the $\alpha$ value is, the less p-values could be rejected.  
+The less p-values rejected, the lower the power.  This works up to a certain point.  
+
+Looking at low $\beta_1$ values (excluding $\beta_1$ = 0 given that is the case when there actually is not a linear relationship), we can see that the the p-values are higher, when p-values are higher, having a large $\alpha$ is required to reject $H_0$.
+However, once the signal is strong enough that the p-values get very small, then any $\alpha$ can reject $H_0$ which is why we see in the charts in section [Plots of Power for values of $sigma], the power value stablizes around 1.
+
+$\sigma$ makes it more difficult to detect a linear relationship, so for lower values of $\sigma$, a relationship can be determined with a lower $\beta_1$ values.  Introducing a higher $\sigma$ values appears to add variability into the power.  You can clearly see from the charts that at a lower $\sigma$ value, there appears to be a clear calcuation that could be performed, however at a higher value of $\sigma$ that appears to be more variability. 
+
+The power calculation at $\beta_1$ = 0, we would expect to actually equal $\alpha$ since we know that a type 1 error should be detected $\alpha$ of the time.  Meaning that $\hat{\text{Power}}$ = $\alpha$ at $\beta_1$ = 0, however we see as we increase $\sigma$, our power value is further away from the value of $\alpha$. Simulating 1000 times appears to be adequate.  By increasing the simulations up to 2,000 we can see that the values to not appear to all go closer to the expected $\alpha$ values, which leads to the conclusion that other factors are also influencing the Power value.

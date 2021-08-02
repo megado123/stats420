@@ -1,0 +1,472 @@
+---
+title: "Week 2 - Homework"
+author: "STAT 420, Summer 2017, Megan Masanz, netId: mjneuman"
+date: ''
+output:
+  html_document: 
+    toc: yes
+  pdf_document: default
+---
+
+**Note** to properly knit this Rmd file, the `MASS` andi `knitr` libraries must be installed as shown below, but this **not** evaluated in this solution to ensure speed of build for solution.
+
+```{r, eval= FALSE, echo=TRUE}
+install.packages("MASS")
+install.packages("knitr")
+```
+
+## Exercise 1 (Using `lm`)
+This exercise used the `cats` dataset from the `MASS` package.
+
+```{r}
+library(MASS)
+```
+
+**(a)** Below is a simple linear model in `R` that helps to understand the size of cat's heart based on the body weight of a cat outputting the result of calling `summary()` on `cat_model`
+
+```{r}
+cat_model = lm(Hwt ~ Bwt, data = cats)
+summary(cat_model)
+```
+
+**(b)** Below is the ouput of the estimated regression coefficients.
+
+```{r}
+coef(cat_model)
+```
+
+The intercept parameter $\beta_0$ is a model parameter that tells us the mean value of a cat's heart weight in grams when a cat weights 0 kg.
+
+The estimated mean value $\hat{\beta_1}$ = 4.0340627 tells us for an increase of one kg in body weight, the estimated mean heart weight in grams increase by 4.0340627.
+
+**(c)** Below is using the model created to predict the heart weight in grams of a cat that weights **3.3** kg.  
+
+Given 3.3 kg is a weight found within the dataset and it is within the range of weights used to calculate the SLR model, I can feel confident in this prediction.
+
+```{r}
+predict(cat_model, newdata = data.frame(Bwt = 3.3))
+
+3.3 %in% unique(cats$Bwt)
+
+min(cats$Bwt) < 3.3 & 3.3 < max(cats$Bwt)
+```
+
+**(d)** Below is using the model to predict the heart weight (grams) of a cat that weights **1.5** kg.
+Given **1.5** kg is not in the initial data set, and is not in the range of values used to create the model, this is considered exterpolation and I do not have confidence in this prediction.
+
+```{r}
+predict(cat_model, newdata = data.frame(Bwt = 1.5))
+1.5 %in% unique(cats$Bwt)
+min(cats$Bwt) < 1.5 & 1.5 < max(cats$Bwt)
+```
+
+**(e)** Below is a scatterplot of the data and the fitted regression line.
+
+```{r}
+plot(Hwt ~ Bwt, data = cats,
+     xlab = "Body Weight (in Kg)",
+     ylab = "Heart weight (in grams)",
+     main = "Cats Heart Weight vs Body Weight",
+     pch  = 20,
+     cex  = 1,
+     col  = "dodgerblue")
+
+abline(cat_model$coefficients["(Intercept)"], cat_model$coefficients["Bwt"], col = "darkorange", lwd = 2)
+```
+
+**(f)** Below is the value of $R^2$ for the model.
+
+```{r}
+summary(cat_model)$r.squared
+```
+
+## Exercise 2 (Writing Functions)
+
+This exercise is a continuation of Exercise 1.
+
+**(a)** Below is a function called `get_sd_est` that calculates an estimate of $\sigma$ in two ways:
+
+- $s_e$ if `mle` is set to `FALSE`.
+- $\hat{\sigma}$ if `mle` is set to `TRUE`.
+
+With input parameters:
+
+- `model_resid` - A vector of residual values from a fitted model.
+- `mle` - A logical (`TRUE` / `FALSE`) variable which defaults to `FALSE`.
+
+```{r}
+get_sd_est = function(model_resid, mle = FALSE) {
+  if (mle == FALSE) {
+  sqrt(sum(model_resid ^ 2) / (length(model_resid) - 2))
+  } else{
+  sqrt((sum(model_resid ^ 2) / length(model_resid)))
+  }
+}
+```
+
+**(b)** Below is running the function `get_sd_est` on the residuals from the model in Exercise 1 with `mle` set to `FALSE`.
+
+```{r}
+get_sd_est(cat_model$residuals, FALSE)
+```
+
+**(c)** Below is running the function `get_sd_est` on the residuals from the model in Exercise 1 with `mle` set to `TRUE`
+
+```{r}
+get_sd_est(cat_model$residuals, TRUE)
+```
+
+**(d)** Below is the output `summary(cat_model)$sigma` 
+
+```{r}
+summary(cat_model)$sigma
+```
+
+which matches the calculation of sigma when the input parameter is `FALSE` indicating it matches the $s_e$ calculation.
+
+```{r}
+summary(cat_model)$sigma == get_sd_est(cat_model$residuals, FALSE)
+```
+
+## Exercise 3 (Simulating SLR)
+
+Consider the model
+
+\[
+Y_i = -4 + 2 x_i + \epsilon_i
+\]
+
+with 
+
+\[
+\epsilon_i \sim N(\mu = 0, \sigma^2 = 6.25)
+\]
+
+where $\beta_0 = -4$ and $\beta_1 = 2$.
+
+This exercise relies heavily on generating random observations. To make this reproducible we will set a seed for the randomization. The following code to makes `birthday` and stores my birthday of August 3, 1981 in the format: `yyyymmdd`. 
+
+
+**(a)** Below shows using `R` to simulate `n = 50` observations from the above model.  The remainder of the exercise uses the following "known" values of $x$
+Using the `sim_slr` function in the text, a data frame is stored in `sim_data`.
+*Note the the function shown below calls $y$ response and $x$ predictor.*
+
+```{r}
+birthday = 19810803
+set.seed(birthday)
+x = runif(n = 50, 0, 10)
+
+beta_0 = -4
+beta_1 = 2
+sigma = sqrt(6.25)
+
+sim_slr = function(x, beta_0, beta_1, sigma) {
+  n = length(x)
+  epsilon = rnorm(n, mean = 0, sd = sigma)
+  y = beta_0 + beta_1 * x + epsilon
+  data.frame(predictor = x, response = y)
+}
+
+sim_data = sim_slr(x, beta_0, beta_1, sigma)
+```
+
+**(b)** Below shows fitting a model to the simulated data and then reporting the estimated coefficients.  
+
+```{r}
+sim_fit = lm(sim_data$response ~ sim_data$predictor)
+coef(sim_fit)
+```
+
+These values were what I had expected. 
+
+Given $\beta_1$ = 2 and the calculated mean of that value $\hat{\beta_1}$ was `r coef(sim_fit)[2]` is pretty close.
+
+Given $\beta_0$ = -4 and the range of values for $x_i$ was from `r range(sim_data$predictor)[1]` to `r range(sim_data$predictor)[2]`, I would expect to see the value have a higher error so a value of `r coef(sim_fit)[1]` is to be expected given the range and the small sample set shown below.
+
+```{r}
+range(sim_data$predictor)
+```
+
+**(c)** Below is a plot of the simulated data in part **(a)** as grey dots.  The regression line part from **(b)** is in orange and the line of the true model is the blue dotted line.
+
+```{r}
+#simulated data
+plot(response ~ predictor, data = sim_data,
+     xlab = "Simulated Predictor Variable",
+     ylab = "Simulated Response Variable",
+     main = "Simulated Regression Data",
+     pch  = 20,
+     cex  = 2,
+     col  = "grey")
+abline(sim_fit, lwd = 3, lty = 1, col = "darkorange")
+abline(beta_0, beta_1, lwd = 3, lty = 2, col = "dodgerblue")
+legend("topright", c("Estimate", "Truth"), lty = c(1, 2), lwd = 2,
+       col = c("darkorange", "dodgerblue"))
+```
+
+**(d)** Using a for loop in `R` below you will find the process of simulating `n=50` observations from the above model $2000$ times.  For the given model, the $x_i$ values remain constant and new response data is calculated.  Each time new response data $y_i$ is calculated, a SLR model is fit to the data and the $\hat{\beta_1}$ value is stored to a variable that is called `beta_hat_1` which has been initialized.
+
+- After simulating the data, the `lm()` function is used to to fit a regression.
+- The `coef()` function and `[]` are used to extract the correct estimated coefficient.
+- `beta_hat_1[i]` is used to store in elements of `beta_hat_1`.
+
+```{r}
+sim_beta_1_hat = function(x, beta_0, beta_1, sigma) {
+    beta_hat_1 = rep(0, 2000)
+    n = length(x)
+    for (i in 1:2000){
+    epsilon = rnorm(n, mean = 0, sd = sigma)
+    y = beta_0 + beta_1 * x + epsilon
+    sim_data = data.frame(predictor = x, response = y)
+    sim_model = lm(response ~ predictor, data = sim_data)
+    beta_hat_1[i] = coef(sim_model)[2]
+  }
+  beta_hat_1
+}
+beta_hat_1 = sim_beta_1_hat(x, beta_0, beta_1, sigma)
+```
+
+**(e)** Below is the mean of `beta_hat_1` which looks very much like the  true value of $\beta_1$ and would be a very good approximation for $\hat{\beta_1}$ 
+
+```{r}
+mean(beta_hat_1)
+```
+
+**(e)** Below is the standard deviation of `beta_hat_1`.
+
+```{r}
+sd(beta_hat_1)
+```
+
+**(f)** Below is a histogram of `beta_hat_1`.  It appears to follow the shape of a normal distribution.  The mean looks to be at approximately 2, as expected.
+
+```{r}
+hist(beta_hat_1,
+     xlab = "beta_hat_1",
+     main = "Histogram of values of beta_hat_1 \n over 2000 Observations",
+     col = "darkorange",
+     border = "dodgerblue")
+```
+
+## Exercise 4 (Be a Skeptic)
+
+Consider the model
+
+\[
+Y_i = 10 + 0 x_i + \epsilon_i
+\]
+
+with
+
+\[
+\epsilon_i \sim N(\mu = 0, \sigma^2 = 1)
+\]
+
+where $\beta_0 = 10$ and $\beta_1 = 0$.
+
+Below you will see setting a seed value equal to **my** birthday, as was done in the previous exercise for August 03, 1981.
+
+```{r}
+birthday = 19810803
+set.seed(birthday)
+x = runif(n = 25, 0, 10)
+```
+
+**(a)** Use `R` to repeat the process of simulating `n = 25` observations from the above model $1500$ times. For the remainder of this exercise, use the following "known" values of $x$.
+
+Each time fit a SLR model to the data and store the value of $\hat{\beta_1}$ in a variable called `beta_hat_1`. You may use [the `sim_slr ` function provided in the text](http://daviddalpiaz.github.io/appliedstats/simple-linear-regression.html#simulating-slr). Hint: Yes $\beta_1 = 0$.
+
+```{r}
+sigma  = 1
+beta_0 = 10
+beta_1 = 0
+
+sim_beta_hat_1 = function(x, beta_0, beta_1, sigma) {
+  beta_hat_1 = rep(0, 1500)
+  n = length(x)
+  for (i in 1:1500){
+    epsilon = rnorm(n, mean = 0, sd = sigma)
+    y = beta_0 + beta_1 * x + epsilon
+    sim_data = data.frame(predictor = x, response = y)
+    sim_model = lm(response ~ predictor, data = sim_data)
+    beta_hat_1[i] = coef(sim_model)[2]
+  }
+  return(beta_hat_1)
+}
+
+beta_hat_1 = sim_beta_hat_1(x, beta_0, beta_1, sigma)
+
+```
+
+**(b)** Plot a histogram of `beta_hat_1`. The shape of the histogram follows a normal distribution.
+
+- The mean appears to be at zero or very close to it.
+- The shape appears to be symetrical about the zero value of x following a normal distribution.
+
+```{r}
+hist(beta_hat_1,
+     xlab = "beta_hat_1",
+     main = "Histogram of values of beta_hat_1 \n over 1500 Observations",
+     col = "darkorange",
+     border = "dodgerblue")
+```
+
+**(c)** Below is importing data in the skeptic.csv file and fitting a SLR model.  
+
+```{r}
+library(readr)
+skeptic = read_csv("skeptic.csv")
+sim_model_skeptic = lm(response ~ predictor, data = skeptic)
+```
+
+Below is the extracted fitted coefficient for $\beta_1$.
+
+```{r}
+coef(sim_model_skeptic)[2]
+```
+
+**(d)** Re-plot the histogram from **(b)**. Now add a vertical red line at the value of $\hat{\beta_1}$ in part **(c)**. To do so, you'll need to use `abline(v = c, col = "red")` where `c` is your value.
+
+```{r}
+hist(beta_hat_1,
+     xlab = "Beta_hat_1",
+     main = "Histogram of values of beta_hat_1 \n over 1500 Observations",
+     col = "darkorange",
+     border = "dodgerblue")
+abline(v = sim_model_skeptic$coefficients["predictor"], col = "red")
+```
+
+**(e)** Below is the proportion of the `beta_hat_1` values are larger than my $\hat{\beta_1}$ calculated in part of **(c)** `r coef(sim_model_skeptic)[2]`
+
+```{r}
+length((beta_hat_1[ beta_hat_1 > coef(sim_model_skeptic)[2]]))/length(beta_hat_1)
+```
+
+**(e)** Proportion Multiplied by 2
+```{r}
+2* length((beta_hat_1[ beta_hat_1 > coef(sim_model_skeptic)[2]]))/length(beta_hat_1)
+```
+
+**(f)** Based on the histogram and part **(e)**, I do not think the [`skeptic.csv`](skeptic.csv) data was generated by this model. I would expect to see the $\hat{\beta_1}$ generated from the skeptic data to be much closer to the mean of the mean of the beta_hat_1 value if it was generated from this model.
+
+## Exercise 5 (Comparing Models)
+
+For this exercise we will use the data stored in [`goalies.csv`](goalies.csv). It contains career data for all 716 players in the history of the National Hockey League to play goaltender through the 2014-2015 season. The variables in the dataset are:
+
+- `Player` - NHL Player Name
+- `First` - First year of NHL career
+- `Last` - Last year of NHL career
+- `GP` - Games Played
+- `GS` - Games Started
+- `W` - Wins
+- `L` - Losses
+- `TOL` - Ties/Overtime/Shootout Losses
+- `GA` - Goals Against
+- `SA` - Shots Against
+- `SV` - Saves
+- `SV_PCT` - Save Percentage
+- `GAA` - Goals Against Average
+- `SO` - Shutouts
+- `MIN` - Minutes
+- `G` - Goals (that the player recorded, not opponents)
+- `A` - Assists (that the player recorded, not opponents)
+- `PTS` - Points (that the player recorded, not opponents)
+- `PIM` - Penalties in Minutes
+
+For this exercise we will define the "Root Mean Square Error" of a model as
+
+\[
+\text{RMSE} = \sqrt{\frac{1}{n} \sum_{i = 1}^{n}(y_i - \hat{y}_i)^2}.
+\]
+
+**(a)** Fit three SLR models, each with "wins" as the response. For the predictor, use "minutes", "goals against", and "shutouts" respectively. For each, calculate $\text{RMSE}$ and $R^2$. Arrange the results in a markdown table, with a row for each model. Suggestion: Create a data frame that stores the results, then investigate the `kable()` function from the `knitr` package.
+
+```{r}
+library(knitr)
+
+goalies = read_csv("goalies.csv")
+
+get_values = function(predictor, dataframe, arg) {
+  values = rep(0, 2)
+  model = lm(arg, data = dataframe)
+  values = c(
+    predictor = predictor,
+    r_squared = summary(model)$r.squared ,
+    rmse = sqrt(sum(model$residuals ^ 2) / length(model$residuals))
+  )
+}
+
+result = rbind(get_values("minutes", goalies, "W ~ MIN"), get_values("goals against", goalies, "W ~ GAA"), get_values("shoutouts", goalies, "W ~ SO"))
+kable(result, format = "markdown", padding = 3)
+```
+
+**(b)** Based on the results, of the three predictors evaluated, it appears **minutes** is the most useful predictor.  It has the lowest `RMSE` at 16.75758 (so it has the lowest squared difference between actual values and the values calculated by the model).  It also has the highest $R^2$ value at 97.11568% of the observed variability in wins is explained by the linear relationship with speed.
+
+## Exercise 00 (SLR without Intercept)
+
+**This exercise will _not_ be graded and is simply provided for your information. No credit will be given for the completion of this exercise. Give it a try now, and be sure to read the solutions later.**
+
+Sometimes it can be reasonable to assume that $\beta_0$ should be 0. That is, the line should pass through the point $(0, 0)$. For example, if a car is traveling 0 miles per hour, its stopping distance should be 0! (Unlike what we saw in the book.)
+
+We can simply define a model without an intercept,
+
+\[
+Y_i = \beta x_i + \epsilon_i.
+\]
+
+**(a)** [In the **Least Squares Approach** section of the text](http://daviddalpiaz.github.io/appliedstats/simple-linear-regression.html#least-squares-approach) you saw the calculus behind the derivation of the regression estimates, and then we performed the calculation for the `cars` dataset using `R`. Here you need to do, but not show, the derivation for the slope only model. You should then use that derivation of $\hat{\beta}$ to write a function that performs the calculation for the estimate you derived. 
+
+In summary, use the method of least squares to derive an estimate for $\beta$ using data points $(x_i, y_i)$ for $i = 1, 2, \ldots n$. Simply put, find the value of $\beta$ to minimize the function
+
+\[
+f(\beta)=\sum_{i=1}^{n}(y_{i}-\beta x_{i})^{2}.
+\]
+
+Then, write a function `get_beta_no_int` that takes input:
+
+- `x` - A predictor variable
+- `y` - A response variable
+
+The function should then output the $\hat{\beta}$ you derived for a given set of data.
+
+```{r}
+get_beta_no_int = function(x,  y){
+  sum(y)/sum(x)
+}
+```
+
+**(b)** Write your derivation in your `.Rmd` file using TeX. Or write your derivation by hand, scan or photograph your work, and insert it into the `.Rmd` as an image. See the [RMarkdown documentation](http://rmarkdown.rstudio.com/) for working with images.
+
+$f(\beta)=\sum_{i=1}^{n}(y_{i}-\beta x_{i})^{2}$
+
+$f(\beta)=\sum_{i=1}^{n}(y_{i}^{2} -2 \beta x_i y_i + \beta^{2} x_i ^ {2}$
+
+$\frac{\partial f}{\partial \beta} = \sum_{i = 1}^{n} -2 x_i y_i + 2 \beta x_i^{2}$
+
+0 = $\frac{\partial f}{\partial \beta} = \sum_{i = 1}^{n} -2 x_i y_i + 2 \beta x_i^{2}$
+
+$\sum_{i = 1}^{n} \beta x_i^{2} = \sum_{i = 1}^{n} x_i y_i$
+
+$\beta = \frac{\sum_{i = 1}^{n} x_i y_i}{\sum_{i = 1}^{n} x_i^{2}}$
+
+$\beta = \frac{\sum_{i = 1}^{n} y_i}{\sum_{i = 1}^{n} x_i}$
+
+**(c)** Test your function on the `cats` data using body weight as `x` and heart weight as `y`. Below is the estimate for $\beta$ for this data.
+
+```{r}
+sum(cats$Hwt)/sum(cats$Bwt)
+```
+
+**(d)** Check your work in `R`. The following syntax can be used to fit a model without an intercept:
+
+```{r}
+beta_model = lm(Hwt ~ 0 + Bwt, data = cats)
+
+coef(beta_model)
+
+
+```
+
+Use this to fit a model to the `cat` data without an intercept. Output the coefficient of the fitted model. It should match your answer to **(c)**.
+
+The values are very similiar.

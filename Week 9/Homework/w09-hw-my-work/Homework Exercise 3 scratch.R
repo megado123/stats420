@@ -1,0 +1,124 @@
+library(readr)
+ballbearings = read_csv("ballbearings.csv")
+
+ballbearings$Company = as.factor(ballbearings$Company)
+ballbearings$Type = as.factor(ballbearings$Type)
+
+View(ballbearings)
+
+pairs(ballbearings)
+
+testModel = function(model){
+  shapiro            = shapiro.test(resid(model))$p.value
+  adjustrsquared     = summary(model)$adj.r.squared
+  parameters         = length(coef(model))
+  pass_shapiro       = ifelse(shapiro > 0.01, "Good Shapiro", "Bad Shapiro")
+  pass_adustrSquared = ifelse(adjustrsquared > 0.52, "Good R^2", "Bad R^2")
+  parameterCount     = ifelse(parameters < 10, "Good Parameters", "Bad Parameters")
+  data.frame(shapiro, adjustrsquared, parameters, pass_shapiro, pass_adustrSquared, parameterCount )
+                              
+}
+
+model = lm(L50 ~ ., data = ballbearings)
+summary(model)
+
+pairs(ballbearings)
+
+#box cox suggests that we shoudl do a log here
+boxcox(model)
+
+#Company B makes 1,2,3
+#Compnay A, C make 0
+new_data = data.frame(
+  y   = ballbearings$L50,
+  x1  = ballbearings$P,
+  x2  = ballbearings$Z,
+  x3  = ballbearings$D,
+  x4  = 1 * as.numeric(ballbearings$Company == "A"),
+  x5  = 1 * as.numeric(ballbearings$Company == "B"),
+  x6  = 1 * as.numeric(ballbearings$Company == "C"),
+  x7  = 1 * as.numeric(ballbearings$Type == "0"),
+  x8  = 1 * as.numeric(ballbearings$Type == "1"),
+  x9  = 1 * as.numeric(ballbearings$Type == "2"),
+  x10 = 1 * as.numeric(ballbearings$Type == "3")
+
+)
+
+View(new_data)
+
+#thought I wanted to do this
+model = lm(log(y) ~ 0 + x1 + x2 + x3 + x4:x7 + x5:x8 + x5:x9 + x5:x10 + x6:x7 + I(x1 ^ 2), data = new_data)
+result = testModel(model)
+result
+summary(model)
+base_mod_back_aic = step(model, direction = "backward", trace = 0)
+testModel(base_mod_back_aic)
+summary(base_mod_back_aic)
+
+model = lm(log(y) ~ 0 + x1 + x2 + x3 + x4:x7 + x5:x8 + x5:x9 + x5:x10 + x6:x7 + I(x1 ^ 2), data = new_data)
+testModel(model)
+
+model = lm(log(y) ~ 0 + x1 + x2 + x3 + x4:x7 + x5:x8 + x5:x9 + x5:x10 + x6:x7 + log(x1), data = new_data)
+testModel(model)
+
+#did this, it works, but want to understand why above was incorrect and I got
+model = lm(log(y) ~ 0 + (.)^2 + I(x1 ^ 2), data = new_data)
+
+summary(model)
+
+n = length(resid(model))
+base_mod_back_bic = step(model, direction = "backward", k = log(n), trace = 0)
+base_mod_back_aic = step(model, direction = "backward", trace = 0)
+
+summary(base_mod_back_aic)
+
+test_mod = lm(log(y) ~ x1 + x2 + x3 + x4:x1:x4, data = new_data)
+
+summary(test_mod)
+
+testModel(base_mod_back_bic)
+testModel(base_mod_back_aic)
+
+length(coef(base_mod_back_aic))
+
+
+#testing normality
+variables = c("x1" , "x2" , "x3" , "x4:x7" , "x5:x8" , "x5:x9" , "x5:x10" , "x6:x7" , "I(x1 ^ 2)")
+
+model = lm(log(y) ~ 0 + x1 + x2 + x3 + x4:x7 + x5:x8 + x5:x9 + x5:x10 + x6:x7  + I(x1 ^ 2), data = new_data)
+model = lm(log(y) ~ 0 + x1 + x2  + x4:x7 + x5:x8 + x5:x9 + x5:x10  + x6:x7 + I(x1 ^ 2) + log(x3), data = new_data)
+summary(model)
+testModel(model)
+
+pairs(new_data)
+getSingle = function(variables, alpha)
+{
+  num_predictors  = length(variables)
+  p_val           = rep(0, num_predictors)
+  bpresult        = rep("BP Failed", num_predictors)
+  bp_p_value      = rep(0, num_predictors)
+  shapiro_p_value = rep(0, num_predictors)
+  strmodel        = rep(0, num_predictors)
+  
+  for (i in 1:length(variables)) {
+    s1            = "log(y)"
+    s2            = variables[i]
+    strmodel[i]      = paste(s1, " ~ " , s2)
+    model         = lm(strmodel[i], data = new_data)
+    p_val[i]      = summary(model)$coefficients[2, 4]
+    bp_p_value[i] = bptest(model)$p.value 
+    
+    par(mfrow = c(1, 2))
+    plot(fitted(model), resid(model), col = 1, pch = 20,
+         xlab = "Fitted", ylab = "Residuals", main = "Fitted versus Residuals")
+    abline(h = 0, col = 1, lwd = 2)
+    qqnorm(resid(model), main = "Normal Q-Q Plot", col = 1)
+    qqline(resid(model), col = 1, lwd = 2)
+    
+    #shapiro[i]    = shapiro.test(resid(model))$p.value
+    
+  }
+}
+
+getSingle(variables)
+length(variables)

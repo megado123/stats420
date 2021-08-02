@@ -1,0 +1,9 @@
+Consider a random variable X that has a t distribution with 7 degrees of freedom. Calculate P[X>1.3].
+
+Consider a random variable Y that has a t distribution with 9 degrees of freedom. Find c such that P[X>c]=0.025.
+
+For this exercise, use the built-in trees dataset in R. Fit a simple linear regression model with Girth as the response and Height as the predictor. What is the p-value for testing H0:ß1=0 vs H1:ß1?0?
+
+Continue using the SLR model you fit in Question 3. What is the length of a 90% confidence interval for ß1?
+
+Continue using the SLR model you fit in Question 3. Calculate a 95% confidence interval for the mean tree girth of a tree that is 79 feet tall.

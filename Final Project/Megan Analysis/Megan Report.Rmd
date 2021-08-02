@@ -1,0 +1,56 @@
+---
+title: "Final Project"
+author: "Megan"
+date: "July 23, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(MASS)
+library(readr)
+library(lmtest)
+library(car)
+library(leaps)
+library(knitr)
+fb <- read_delim("dataset_Facebook.csv", ";", escape_double = FALSE, trim_ws = TRUE)
+```
+
+Before analyzing the data, we will explore what the variables mean, and determine which variables should be considered as Factor Variables.
+
+Variables:
+
+- `Type` : `Link`, `Photo`, `Status`, `Video`
+- `Category`: `1`, `2`, `3`
+- `Post Month`
+
+```{r}
+fb$Type           = as.factor(fb$Type)
+fb$Category       = as.factor(fb$Category)
+fb$`Post Month`   = as.factor(fb$`Post Month`)
+fb$`Post Hour`    = as.factor(fb$`Post Hour`)
+fb$`Post Weekday` = as.factor(fb$`Post Weekday`)
+fb$Paid           = as.factor(fb$Paid)
+
+
+
+result = cbind( "Type",         levels(fb$Type), 
+                "Category",     levels(fb$Category),
+                "Post Month",   levels(fb$`Post Month`),
+                "Post Hour",    levels(fb$`Post Hour`),
+                "Post Weekday", levels(fb$`Post Weekday`),
+                "Paid",         levels(fb$Paid)
+                )
+
+
+kable(result, format = "markdown", padding = 3)
+```
+
+
+
+An effort review the variance inflation factors in R causes a problem since there are aliased coeffients in the model.  First we will need to explore the data to understand where there are aliased coefficents.
+
+

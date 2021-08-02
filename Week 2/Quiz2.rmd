@@ -1,0 +1,150 @@
+---
+title: "Quiz 2"
+author: "Megan Masanz"
+date: "May 26, 2017"
+output: html_document
+---
+
+Currently incorrect: 13
+
+
+1.  (correct) Consider the linear regression model
+
+$$
+Y = 10 + 5x + \epsilon
+$$
+
+$$
+\epsilon \sim N(0, \sigma^2 = 16)
+$$
+Calculate the probability that Y is less than 6 given that x=0.
+
+Answer:  0.1586553
+
+```{r}
+pnorm(-4, 0 ,4 ) 
+```
+
+2. (correct)  using the SLR model in question 1, what is the probability that Y is greater than 3 given that x = -1?
+
+
+```{r}
+pnorm(-2,0,4, lower.tail = FALSE)
+```
+
+
+3.(correct) Using the SLP model in Question 1, what is the prob that Y is greater than 3
+given that X = -2?
+
+```{r}
+pnorm(3, 0, 4, lower.tail = FALSE)
+```
+
+
+4.  (correct) Fit a SLR to predict duration of an eruption of the old faithful based on waiting time
+
+What is the estimate of the intercept parameter?
+
+```{r}
+waiting_model = lm(eruptions ~ waiting, data = faithful)
+summary(waiting_model)$coefficients[1]
+```
+
+5. (correct)  What is the estimate of the slope parameter
+```{r}
+waiting_model = lm(eruptions ~ waiting, data = faithful)
+coef(waiting_model)[2]
+```
+
+6.  (correct) Predict duration for time of 80 minutes
+
+```{r}
+waiting_model = lm(eruptions ~ waiting, data = faithful)
+predict(waiting_model, newdata = data.frame(waiting = 80))
+```
+
+7. (correct) Predict for 120 minutes
+```{r}
+waiting_model = lm(eruptions ~ waiting, data = faithful)
+predict(waiting_model, newdata = data.frame(waiting = 120))
+```
+
+
+8.  (correct) Which is more accurate - the 80 since 80 is in the dataframe
+```{r}
+80 %in% faithful$waiting
+```
+
+9.  **Incorrect?** Calculate RSS for the model
+```{r}
+waiting_model = lm(eruptions ~ waiting, data = faithful)
+# get yi_hat values for the faithful dataset
+yi_hat = predict(waiting_model, newdata = data.frame(faithful))
+##RSS = Residual Sum of Squares
+(sum( (faithful$eruptions  - yi_hat )^ 2))/ (length(faithful$eruptions) - 2)
+
+## Alternatively
+sum(waiting_model$residuals^2)/(length(faithful$eruptions) - 2)
+```
+
+9 - rethinking question 9 - better not be this answer
+```{r}
+sum(waiting_model$residuals ^ 2)
+```
+
+10.  What proportion of the variation in eruption duration is explained by the linear relationship with waiting time?
+```{r}
+waiting_model = lm(eruptions ~ waiting, data = faithful)
+summary(waiting_model)$r.squared
+```
+
+11.  Calculate the standard deviation of the residuals of the fitted model.
+
+```{r}
+waiting_model = lm(eruptions ~ waiting, data = faithful)
+sd(waiting_model$residuals)
+```
+
+**But questioning since I thought it was**
+```{r}
+#Question 11
+summary(waiting_model)$sigma
+
+#Question 11 also answered
+waiting_model = lm(eruptions ~ waiting, data = faithful)
+fitted_data = predict(waiting_model, newdata = data.frame(faithful))
+sqrt((sum( (faithful$eruptions  - fitted_data )^ 2))/ (length(fitted_data) - 2))
+```
+
+
+12.  Suppose both least squares and maximum likelihood are used to fit a simple linear regression model to the same data. The estimates for the slope and the intercept will be:
+
+The same.
+
+13. ** None are true. -  I got this wrong. **
+
+Consider the fitted regression model:
+
+y^= ???1.5+2.3x
+Select all of the following that must be true.
+
+The difference between the y values of observations at x=10 and x=9 is 2.3.
+(no)
+
+There are observations in the dataset used to fit this regression with negative y values.
+(no)
+
+A good estimate for the mean of Y when x=0 is -1.5.
+(no - i guess if i had to pic an option?)
+
+14. Selected last 2 options.
+The SLR model assumes that the relationship between the response and the predictor is linear. 
+The SLR model assumes that errors are independent. (last option)
+
+
+15. Suppose you fit a simple linear regression model and obtain ??^=0.
+
+Does this mean that there is no relationship between the response and the predictor?
+
+Answer: No
+
